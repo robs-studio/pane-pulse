@@ -59,7 +59,9 @@ Check the platform before promising anything:
 
 ## Step 2. Get the source
 
-The installer's command line and the verifier live in the repository, not in the packaged extension, so you need the source even if a `.vsix` is already to hand. The installer itself does ship inside the extension, but the road that drives it there is a dialog only a human can click.
+The installer's command line and the verifier live in the repository, not in the packaged extension, so you need the source even if a `.vsix` is already to hand.
+
+(If the person would rather not have a build on their machine at all, there is a shorter road they can walk themselves: download the `.vsix` from the project's latest release, install it, and run **Pane Pulse: Install Hooks** from the Command Palette, which previews and asks. Offer it, then stop; the dialog is theirs to click, not yours.) The installer itself does ship inside the extension, but the road that drives it there is a dialog only a human can click.
 
 ```sh
 git clone https://github.com/robs-studio/pane-pulse-vscode.git "$HOME/pane-pulse"
@@ -248,6 +250,8 @@ Glitch is a local-first assistant whose folder is called a brain. Pane Pulse kno
 3. **Editing Claude Code's settings is allowed.** The brain guard covers the brain's own files, not `~/.claude/settings.json`, which is where the hooks belong.
 4. **Glitch's `/look` restore rewrites both settings files**, which can strip the hooks while the install record still claims they are there. That is exactly what step 6 catches: run it after any `/look` change, and run step 5 again if the verdict says the hooks are gone.
 5. **Installing from the repo, as this file tells you to, records the repo's `hook/` folder as the source.** If you later edit anything in `hook/`, step 6 reports the deployed copy as out of date, which is correct: run step 5 again to redeploy it.
+
+6. **Getting the source, in Glitch:** `/import-workspace https://github.com/robs-studio/pane-pulse-vscode` puts it under `workspaces/` the sanctioned way and records it, which is better than a loose clone. Everything after that is the same.
 
 Nothing else about Glitch matters here, and nothing in this file needs Glitch to work.
 
