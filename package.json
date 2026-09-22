@@ -12,12 +12,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/robs-studio/pane-pulse-vscode.git"
+    "url": "git+https://github.com/robs-studio/pane-pulse.git"
   },
   "bugs": {
-    "url": "https://github.com/robs-studio/pane-pulse-vscode/issues"
+    "url": "https://github.com/robs-studio/pane-pulse/issues"
   },
-  "homepage": "https://github.com/robs-studio/pane-pulse-vscode#readme",
+  "homepage": "https://github.com/robs-studio/pane-pulse#readme",
   "keywords": [
     "claude",
     "claude code",

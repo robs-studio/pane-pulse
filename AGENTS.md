@@ -64,7 +64,7 @@ The installer's command line and the verifier live in the repository, not in the
 (If the person would rather not have a build on their machine at all, there is a shorter road they can walk themselves: download the `.vsix` from the project's latest release, install it, and run **Pane Pulse: Install Hooks** from the Command Palette, which previews and asks. Offer it, then stop; the dialog is theirs to click, not yours.) The installer itself does ship inside the extension, but the road that drives it there is a dialog only a human can click.
 
 ```sh
-git clone https://github.com/robs-studio/pane-pulse-vscode.git "$HOME/pane-pulse"
+git clone https://github.com/robs-studio/pane-pulse.git "$HOME/pane-pulse"
 ```
 
 Use any folder the person prefers; every command below takes the folder as an absolute path.
@@ -251,7 +251,7 @@ Glitch is a local-first assistant whose folder is called a brain. Pane Pulse kno
 4. **Glitch's `/look` restore rewrites both settings files**, which can strip the hooks while the install record still claims they are there. That is exactly what step 6 catches: run it after any `/look` change, and run step 5 again if the verdict says the hooks are gone.
 5. **Installing from the repo, as this file tells you to, records the repo's `hook/` folder as the source.** If you later edit anything in `hook/`, step 6 reports the deployed copy as out of date, which is correct: run step 5 again to redeploy it.
 
-6. **Getting the source, in Glitch:** `/import-workspace https://github.com/robs-studio/pane-pulse-vscode` puts it under `workspaces/` the sanctioned way and records it, which is better than a loose clone. Everything after that is the same.
+6. **Getting the source, in Glitch:** `/import-workspace https://github.com/robs-studio/pane-pulse` puts it under `workspaces/` the sanctioned way and records it, which is better than a loose clone. Everything after that is the same.
 
 Nothing else about Glitch matters here, and nothing in this file needs Glitch to work.
 

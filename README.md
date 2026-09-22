@@ -5,9 +5,9 @@ It is for running several Claude panes in one window, so a glance at the tab lis
 Its Panes panel in the sidebar lists every Claude pane under what it needs from you, with its model, its effort and how full its context is, and a right-click menu acts on a pane without hunting for its tab.
 Clicking a pane clears only what you have actually dealt with.
 
-![The Panes panel](https://raw.githubusercontent.com/robs-studio/pane-pulse-vscode/main/docs/images/panes-panel.png)
+![The Panes panel](https://raw.githubusercontent.com/robs-studio/pane-pulse/main/docs/images/panes-panel.png)
 
-![Claude Code tabs marked in VS Code](https://raw.githubusercontent.com/robs-studio/pane-pulse-vscode/main/docs/images/tab-marks.png)
+![Claude Code tabs marked in VS Code](https://raw.githubusercontent.com/robs-studio/pane-pulse/main/docs/images/tab-marks.png)
 
 ## What you need
 
@@ -81,7 +81,7 @@ Everything it changes is listed under [What the install changes](#what-the-insta
 
 No clone, no Node, no build. Two steps and a dialog.
 
-1. **Download `pane-pulse-0.2.0.vsix`** from the [latest release](https://github.com/robs-studio/pane-pulse-vscode/releases/latest).
+1. **Download `pane-pulse-0.2.0.vsix`** from the [latest release](https://github.com/robs-studio/pane-pulse/releases/latest).
 2. **Install it**: in VS Code, Extensions view → the `...` menu → "Install from VSIX…", and pick that file. From a terminal it is `code --install-extension pane-pulse-0.2.0.vsix`.
 3. **Reload the window** when it suits you, then open the Command Palette and run **Pane Pulse: Install Hooks**. It shows you every change it would make in a read-only document, then asks. Only the **Install** button writes anything.
 
@@ -95,7 +95,7 @@ If you work with a coding agent in your terminal, paste this:
 
 ```
 Install the Pane Pulse VS Code extension for me.
-Clone https://github.com/robs-studio/pane-pulse-vscode into a folder of your choosing,
+Clone https://github.com/robs-studio/pane-pulse into a folder of your choosing,
 then follow its AGENTS.md exactly, from step 1 to step 7.
 Show me the dry run and wait for my yes before you change any settings.
 ```
@@ -109,7 +109,7 @@ Pane Pulse is not on the Marketplace: you build the `.vsix` yourself, which take
 **1. Get the source.**
 
 ```sh
-git clone https://github.com/robs-studio/pane-pulse-vscode.git
+git clone https://github.com/robs-studio/pane-pulse.git
 cd pane-pulse
 node --version    # must be 22.18 or later, or step 3 fails with a confusing syntax error
 ```
