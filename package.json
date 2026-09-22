@@ -1,0 +1,386 @@
+{
+  "name": "pane-pulse",
+  "displayName": "Pane Pulse",
+  "description": "Marks a Claude Code terminal tab thinking while it works and needs-you when it finishes in a background pane.",
+  "version": "0.2.0",
+  "icon": "media/icon.png",
+  "publisher": "robs-studio",
+  "author": {
+    "name": "Rob Kolts",
+    "email": "rob@robkolts.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robs-studio/pane-pulse-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/robs-studio/pane-pulse-vscode/issues"
+  },
+  "homepage": "https://github.com/robs-studio/pane-pulse-vscode#readme",
+  "keywords": [
+    "claude",
+    "claude code",
+    "terminal",
+    "tabs",
+    "agents"
+  ],
+  "type": "module",
+  "main": "./dist/extension.cjs",
+  "engines": {
+    "vscode": "^1.138.0",
+    "node": ">=22.18"
+  },
+  "categories": [
+    "Other"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "Pane Pulse reads Claude Code's own files and VS Code's terminals. It never reads or runs anything from the folder you have open."
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "panePulse.showPanes",
+        "title": "Show Panes",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.installHooks",
+        "title": "Install Hooks",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.uninstallHooks",
+        "title": "Uninstall Hooks",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.restoreBackups",
+        "title": "Restore Backups",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.openSettings",
+        "title": "Settings",
+        "category": "Pane Pulse",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "panePulse.openPane",
+        "title": "Open Pane",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.markSeen",
+        "title": "Mark as Seen",
+        "category": "Pane Pulse",
+        "enablement": "paneBucket == 'unseen'"
+      },
+      {
+        "command": "panePulse.mutePane",
+        "title": "Mute Status",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.unmutePane",
+        "title": "Unmute Status",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.renamePane",
+        "title": "Rename…",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.copyLastReply",
+        "title": "Copy Last Reply",
+        "category": "Pane Pulse"
+      },
+      {
+        "command": "panePulse.clearContext",
+        "title": "/Clear Context",
+        "category": "Pane Pulse",
+        "enablement": "paneBucket == 'idle' || paneBucket == 'unseen' || paneMute != 'none'"
+      },
+      {
+        "command": "panePulse.interruptPane",
+        "title": "Interrupt",
+        "category": "Pane Pulse",
+        "enablement": "paneBucket == 'working' || paneBucket == 'needsYou' || paneMute != 'none'"
+      },
+      {
+        "command": "panePulse.closePane",
+        "title": "Close Pane",
+        "category": "Pane Pulse"
+      }
+    ],
+    "menus": {
+      "webview/context": [
+        {
+          "command": "panePulse.openPane",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane'",
+          "group": "1_navigate@1"
+        },
+        {
+          "command": "panePulse.markSeen",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane'",
+          "group": "2_attention@1"
+        },
+        {
+          "command": "panePulse.mutePane",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane' && paneMute == 'none'",
+          "group": "2_attention@2"
+        },
+        {
+          "command": "panePulse.unmutePane",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane' && paneMute == 'marker'",
+          "group": "2_attention@2"
+        },
+        {
+          "command": "panePulse.renamePane",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane'",
+          "group": "3_identity@1"
+        },
+        {
+          "command": "panePulse.copyLastReply",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane'",
+          "group": "3_identity@2"
+        },
+        {
+          "command": "panePulse.clearContext",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane'",
+          "group": "4_session@1"
+        },
+        {
+          "command": "panePulse.interruptPane",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane'",
+          "group": "4_session@2"
+        },
+        {
+          "command": "panePulse.closePane",
+          "when": "webviewId == 'panePulse.panes' && webviewSection == 'pane'",
+          "group": "5_destroy@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "panePulse.openSettings",
+          "when": "view == panePulse.panes",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "panePulse.openPane",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.markSeen",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.mutePane",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.unmutePane",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.renamePane",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.copyLastReply",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.clearContext",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.interruptPane",
+          "when": "false"
+        },
+        {
+          "command": "panePulse.closePane",
+          "when": "false"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "panePulse",
+          "title": "Pane Pulse",
+          "icon": "media/pane-pulse.svg"
+        }
+      ]
+    },
+    "views": {
+      "panePulse": [
+        {
+          "type": "webview",
+          "id": "panePulse.panes",
+          "name": "Panes"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Pane Pulse",
+      "properties": {
+        "panePulse.peek.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 1,
+          "description": "Show a pane's details when you hover over its row."
+        },
+        "panePulse.context.warnAtPercent": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 99,
+          "order": 2,
+          "description": "The context % turns amber from here."
+        },
+        "panePulse.context.alertAtPercent": {
+          "type": "integer",
+          "default": 80,
+          "minimum": 2,
+          "maximum": 100,
+          "order": 3,
+          "description": "The context % turns red from here."
+        },
+        "panePulse.terminal.disableEnvironmentChangeIndicator": {
+          "type": "boolean",
+          "default": false,
+          "order": 4,
+          "markdownDescription": "Hide the warning triangle VS Code puts on a terminal's tab when an extension wants to relaunch the terminal to change its environment. Ticking sets `#terminal.integrated.environmentChangesIndicator#` to `off` in your user settings; unticking puts back what was there."
+        },
+        "panePulse.about": {
+          "type": "null",
+          "default": null,
+          "order": 5,
+          "markdownDescription": "This VS Code extension was made by Rob Kolts, [rob@robkolts.com](mailto:rob@robkolts.com). Built with Glitch. MIT licence."
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "panePulse.needsYouForeground",
+        "description": "Colour of the Needs You status icon in the Panes list.",
+        "defaults": {
+          "dark": "#E5A13A",
+          "light": "#B06D00",
+          "highContrast": "#FFB000",
+          "highContrastLight": "#B06D00"
+        }
+      },
+      {
+        "id": "panePulse.unseenForeground",
+        "description": "Colour of the Unseen status icon in the Panes list.",
+        "defaults": {
+          "dark": "#4FA6FF",
+          "light": "#1A6FD1",
+          "highContrast": "#6FC3FF",
+          "highContrastLight": "#1A6FD1"
+        }
+      },
+      {
+        "id": "panePulse.workingForeground",
+        "description": "Colour of the Working status icon in the Panes list.",
+        "defaults": {
+          "dark": "#73C991",
+          "light": "#2E8B57",
+          "highContrast": "#89D185",
+          "highContrastLight": "#2E8B57"
+        }
+      },
+      {
+        "id": "panePulse.idleForeground",
+        "description": "Colour of the Idle status icon in the Panes list.",
+        "defaults": {
+          "dark": "descriptionForeground",
+          "light": "descriptionForeground",
+          "highContrast": "descriptionForeground",
+          "highContrastLight": "descriptionForeground"
+        }
+      },
+      {
+        "id": "panePulse.mutedForeground",
+        "description": "Colour of the Muted status icon in the Panes list.",
+        "defaults": {
+          "dark": "disabledForeground",
+          "light": "disabledForeground",
+          "highContrast": "disabledForeground",
+          "highContrastLight": "disabledForeground"
+        }
+      },
+      {
+        "id": "panePulse.contextLowForeground",
+        "description": "Colour of a pane's context % below panePulse.context.warnAtPercent.",
+        "defaults": {
+          "dark": "#73C991",
+          "light": "#2E8B57",
+          "highContrast": "#89D185",
+          "highContrastLight": "#2E8B57"
+        }
+      },
+      {
+        "id": "panePulse.contextMidForeground",
+        "description": "Colour of a pane's context % from panePulse.context.warnAtPercent up to panePulse.context.alertAtPercent.",
+        "defaults": {
+          "dark": "#E5A13A",
+          "light": "#B06D00",
+          "highContrast": "#FFB000",
+          "highContrastLight": "#B06D00"
+        }
+      },
+      {
+        "id": "panePulse.contextHighForeground",
+        "description": "Colour of a pane's context % from panePulse.context.alertAtPercent up.",
+        "defaults": {
+          "dark": "#F14C4C",
+          "light": "#C72E2E",
+          "highContrast": "#F48771",
+          "highContrastLight": "#C72E2E"
+        }
+      },
+      {
+        "id": "panePulse.peekAccentForeground",
+        "description": "Colour of the model and effort line in a pane's hover peek.",
+        "defaults": {
+          "dark": "#B48EF0",
+          "light": "#7B4FD6",
+          "highContrast": "#C5A5FF",
+          "highContrastLight": "#7B4FD6"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/webview/tsconfig.json",
+    "lint": "eslint .",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/vscode": "^1.138.0",
+    "@vscode/codicons": "^0.0.46-24",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.11.0",
+    "jsonc-parser": "^3.3.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0"
+  }
+}

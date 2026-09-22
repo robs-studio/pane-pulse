@@ -1,0 +1,23 @@
+# Secret-hygiene ignores: files whose NAME suggests a credential.
+# This catches a stray file, not a secret pasted into a tracked one.
+.env*
+*.pem
+*.key
+*credentials*
+client_secret*.json
+*token*.json
+.mcp.json
+*.mcp.json
+.mcp.local.json
+
+# Build output and local tooling.
+node_modules/
+dist/
+out/
+*.vsix
+.vscode-test/
+
+# --- Glitch publish boundary (added by workspace-git) ---
+.planning/
+STATE.md
+CLAUDE.md

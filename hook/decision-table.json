@@ -1,0 +1,123 @@
+{
+  "version": 3,
+  "about": "pane-pulse decision table. The single source of truth shared by three readers: hook/hook.js (CommonJS, zero deps, reads this file from beside itself), src/decision.ts and tests/contract.test.mjs. One row per (event, matcher, agent_id, bg) region. The regions are disjoint and, once the normalisation block below has been applied, total: exactly one row matches any input, so nothing falls through and no row is shadowed. Apply the normalisation block first or the rows are NOT total -- that block is part of the contract, not a detail of any one reader. There is deliberately no focus dimension: the hook never decides whether the member was looking at a pane, it always sets the mark, and the VS Code extension owns every clear. Only an unread mark is ever cleared by looking at a pane; a waiting mark changes only when the state does, which is why a wrong focus guess can drop an unread mark and can never drop a waiting one. agent_id is present only inside a subagent call, so absent means the main thread and is the normal case. bg is background_tasks.length, a field the docs put on Stop and SubagentStop only. Event names and notification_type values verified against https://code.claude.com/docs/en/hooks on 2026-09-20; the quotes were read from the documentation itself, not from memory. A row is registered when its (event, matcher-when-matcher_mode-is-in) key is listed in registrations below; registered rows are the only ones ever written into Claude Code's settings, each written in the shape its registration declares -- 'node' for the exec form that runs hook.js, 'shell' for the one-liner PostToolUse uses because it fires once per tool call -- and every other row still exists because the three readers share this contract. SessionStart is registered on its source -- startup, resume or clear, three of the five values the docs name -- so a pane is listed from the moment claude starts, and it prints nothing: those rows are idle with no sequence because a hook's plain stdout on SessionStart is added to Claude's context (a /clear's mark is already wiped by the SessionEnd row's own clear), while compact and fork stay unregistered no-ops so a mid-turn compaction never touches a spinner.",
+  "sequences": {
+    "spin": "\u001b]9;4;3;0\u001b\\",
+    "alert": "\u001b]9;4;4;100\u001b\\",
+    "blocked": "\u001b]9;4;2;100\u001b\\",
+    "clear": "\u001b]9;4;0;0\u001b\\"
+  },
+  "subject_fields": {
+    "SessionStart": "source",
+    "PreToolUse": "tool_name",
+    "Notification": "notification_type"
+  },
+  "normalisation": {
+    "about": "Rules every reader applies to one event's payload BEFORE comparing it with a row. They live here, as data, because the three readers share no code: hook/hook.js is plain CommonJS and never imports src/decision.ts. The rows are NOT total on their own -- a Stop whose payload carries no background_tasks matches no bg row until absent_reads_as is applied, and a reader that skips this block emits no sequence and leaves that pane's spinner lit forever. Apply all three rules and the rows are total and unique: every input matches exactly one row, and none matches two. There is no focus rule here and there never will be: the hook reads no focus of any kind, so a pane's own payload is the whole input.",
+    "bg": {
+      "row_field": "bg",
+      "payload_field": "background_tasks",
+      "derive": "array_length",
+      "absent_reads_as": 0,
+      "non_numeric_reads_as": 0,
+      "compare": { "any": "always matches", "0": "matches when count <= 0", ">0": "matches when count > 0" },
+      "rule": "Read the payload's background_tasks as its array length. The docs put the field on Stop and SubagentStop only, and even there only when the task registry is reachable, so an absent field is a real state and never an error: a missing key or a null reads as absent_reads_as, and a present-but-unreadable value (not an array, not a finite number) reads as non_numeric_reads_as. Compare the resulting count with the row's bg as the compare table above says."
+    },
+    "agent_id": {
+      "row_field": "agent_id",
+      "payload_field": "agent_id",
+      "derive": "string_or_absent",
+      "absent_reads_as": "absent",
+      "empty_string_reads_as": "absent",
+      "non_string_reads_as": "absent",
+      "compare": { "any": "always matches", "absent": "matches when the reading is absent", "present": "matches when the reading is present" },
+      "rule": "agent_id is present only when the hook fires inside a subagent call, so its absence means the main thread and is the normal case, never an error. A missing key, a null, a non-string and an empty string all read as absent; any other string reads as present."
+    },
+    "subject": {
+      "row_field": "matcher",
+      "payload_field_by_event": "subject_fields",
+      "derive": "string_or_absent",
+      "absent_reads_as": null,
+      "non_string_reads_as": null,
+      "compare": { "in": "matches when the subject is a string equal to one whole alternative", "not-in": "matches every other subject, including no subject at all", "no matcher": "matches any subject" },
+      "rule": "The subject is the payload field that subject_fields names for this event (source for SessionStart, tool_name for PreToolUse, notification_type for Notification); every other event has no subject at all. A missing key, a null or a non-string reads as no subject. A matcher is a '|'-separated list of exact, whole-string alternatives -- the doc's own exact-match matcher path -- never a regular expression, never a prefix."
+    }
+  },
+  "registrations": [
+    { "event": "SessionStart", "matcher": "startup|resume|clear", "shape": "node" },
+    { "event": "UserPromptSubmit", "shape": "node" },
+    { "event": "PreToolUse", "matcher": "AskUserQuestion|ExitPlanMode", "shape": "node" },
+    { "event": "PermissionRequest", "shape": "node" },
+    { "event": "PostToolUse", "shape": "shell" },
+    { "event": "Notification", "matcher": "permission_prompt|elicitation_dialog|agent_needs_input|quota_auto_resume_stale|quota_auto_resume_disabled", "shape": "node" },
+    { "event": "Stop", "shape": "node" },
+    { "event": "StopFailure", "shape": "node" },
+    { "event": "SessionEnd", "shape": "node" }
+  ],
+  "rows": [
+    { "event": "SessionStart", "matcher": "startup|resume|clear", "matcher_mode": "in", "agent_id": "absent", "bg": "any", "state": "idle", "sequence": null, "registered": true },
+    { "event": "SessionStart", "matcher": "startup|resume|clear", "matcher_mode": "in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+    { "event": "SessionStart", "matcher": "startup|resume|clear", "matcher_mode": "not-in", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "SessionStart", "matcher": "startup|resume|clear", "matcher_mode": "not-in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "UserPromptSubmit", "agent_id": "absent", "bg": "any", "state": "thinking", "sequence": "spin", "registered": true },
+    { "event": "UserPromptSubmit", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+
+    { "event": "PreToolUse", "matcher": "AskUserQuestion|ExitPlanMode", "matcher_mode": "in", "agent_id": "absent", "bg": "any", "state": "waiting", "sequence": "blocked", "registered": true },
+    { "event": "PreToolUse", "matcher": "AskUserQuestion|ExitPlanMode", "matcher_mode": "in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+    { "event": "PreToolUse", "matcher": "AskUserQuestion|ExitPlanMode", "matcher_mode": "not-in", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "PreToolUse", "matcher": "AskUserQuestion|ExitPlanMode", "matcher_mode": "not-in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "PermissionRequest", "agent_id": "absent", "bg": "any", "state": "waiting", "sequence": "blocked", "registered": true },
+    { "event": "PermissionRequest", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+
+    { "event": "Elicitation", "agent_id": "absent", "bg": "any", "state": "waiting", "sequence": "blocked", "registered": false },
+    { "event": "Elicitation", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "ElicitationResult", "agent_id": "absent", "bg": "any", "state": "thinking", "sequence": "spin", "registered": false },
+    { "event": "ElicitationResult", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "PostToolUse", "agent_id": "absent", "bg": "any", "state": "thinking", "sequence": "spin", "registered": true },
+    { "event": "PostToolUse", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+
+    { "event": "PostToolUseFailure", "agent_id": "absent", "bg": "any", "state": "thinking", "sequence": "spin", "registered": false },
+    { "event": "PostToolUseFailure", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "PermissionDenied", "agent_id": "absent", "bg": "any", "state": "thinking", "sequence": "spin", "registered": false },
+    { "event": "PermissionDenied", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "PreCompact", "agent_id": "absent", "bg": "any", "state": "thinking", "sequence": "spin", "registered": false },
+    { "event": "PreCompact", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "PostCompact", "agent_id": "absent", "bg": "any", "state": "thinking", "sequence": "spin", "registered": false },
+    { "event": "PostCompact", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "Stop", "agent_id": "absent", "bg": "0", "state": "unread", "sequence": "alert", "registered": true },
+    { "event": "Stop", "agent_id": "absent", "bg": ">0", "state": "thinking", "sequence": "spin", "registered": true },
+    { "event": "Stop", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+
+    { "event": "StopFailure", "agent_id": "absent", "bg": "any", "state": "unread", "sequence": "alert", "registered": true },
+    { "event": "StopFailure", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+
+    { "event": "Notification", "matcher": "permission_prompt|elicitation_dialog|agent_needs_input|quota_auto_resume_stale|quota_auto_resume_disabled", "matcher_mode": "in", "agent_id": "absent", "bg": "any", "state": "waiting", "sequence": "blocked", "registered": true },
+    { "event": "Notification", "matcher": "permission_prompt|elicitation_dialog|agent_needs_input|quota_auto_resume_stale|quota_auto_resume_disabled", "matcher_mode": "in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+    { "event": "Notification", "matcher": "idle_prompt", "matcher_mode": "in", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "Notification", "matcher": "idle_prompt", "matcher_mode": "in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "Notification", "matcher": "agent_completed", "matcher_mode": "in", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "Notification", "matcher": "agent_completed", "matcher_mode": "in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "Notification", "matcher": "permission_prompt|elicitation_dialog|agent_needs_input|quota_auto_resume_stale|quota_auto_resume_disabled|idle_prompt|agent_completed", "matcher_mode": "not-in", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "Notification", "matcher": "permission_prompt|elicitation_dialog|agent_needs_input|quota_auto_resume_stale|quota_auto_resume_disabled|idle_prompt|agent_completed", "matcher_mode": "not-in", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "SessionEnd", "agent_id": "absent", "bg": "any", "state": "gone", "sequence": "clear", "registered": true },
+    { "event": "SessionEnd", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": true },
+
+    { "event": "SubagentStop", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "SubagentStop", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "SubagentStart", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "SubagentStart", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+
+    { "event": "TaskCompleted", "agent_id": "absent", "bg": "any", "state": "noop", "sequence": null, "registered": false },
+    { "event": "TaskCompleted", "agent_id": "present", "bg": "any", "state": "noop", "sequence": null, "registered": false }
+  ]
+}

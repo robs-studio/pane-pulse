@@ -1,0 +1,479 @@
+/* The Panes panel's look, drawn in VS Code's own theme.
+ *
+ * src/panel.ts writes the list's HTML and decides every class; this file decides how each class
+ * looks, and src/webview/main.ts only places the peek and sizes its bar. The numbers below were
+ * measured off panel-v2.png: the status icon 10px in from the pane's left edge and the name 8px
+ * past it, the columns in the font one pixel smaller than the name, the model and effort words
+ * each starting on their own column line and the context % ending on the right one, 12px of room
+ * on the right, bucket headers in bold 11px capitals with the icon on the rows' icon line and the
+ * count on the % line, a hairline above Muted, and the peek at 12px padding with a 70px label
+ * column and a 3px bar. Rows are VS Code's 22px, not the mockup's airier 27px, so the list keeps
+ * the density of the sidebar around it; --pp-row-height is the one place to change that.
+ *
+ * Four rules this file is built around:
+ *
+ *   * COLOURS ARE THE THEME'S. Every colour is a VS Code variable: the nine Pane Pulse colours the
+ *     extension contributes (each re-colourable in workbench.colorCustomizations), and VS Code's
+ *     own list, hover and focus colours. Each has a fallback, used only if the variable is missing.
+ *   * A CLASS CARRIES A COLOUR, NEVER A STYLE ATTRIBUTE (P1). The webview's CSP drops every
+ *     `style="..."`, so a status is coloured by `s-<bucket>` and a context level by `c-<level>`,
+ *     and the peek's bar width is the only size main.ts sets, through the CSSOM.
+ *   * THE PEEK NEVER MOVES THE LIST. It is a fixed overlay outside #list, above everything, and
+ *     each row's card waits in a <template>, which draws nothing, so the list's height is the
+ *     same with the peek up or down.
+ *   * EVERY THEME, EVERY WIDTH, NO MOTION WHEN ASKED. High contrast swaps backgrounds for
+ *     outlines; reduced motion stops the spinner and the peek's fade; a narrow pane drops the
+ *     effort column under 240px and the model column too under 190px, and a name always ends in
+ *     an ellipsis rather than pushing a column out.
+ *
+ * Nothing here is fetched from anywhere: no url(), no @import. The codicon font arrives through
+ * dist/codicons/codicon.css, which the panel's HTML links before this file.
+ */
+
+:root {
+  --pp-needs-you: var(
+    --vscode-panePulse-needsYouForeground,
+    var(--vscode-list-warningForeground, #e5a13a)
+  );
+  --pp-unseen: var(--vscode-panePulse-unseenForeground, var(--vscode-charts-blue, #4fa6ff));
+  --pp-working: var(--vscode-panePulse-workingForeground, var(--vscode-charts-green, #73c991));
+  --pp-idle: var(--vscode-panePulse-idleForeground, var(--vscode-descriptionForeground, #9d9d9d));
+  --pp-muted: var(--vscode-panePulse-mutedForeground, var(--vscode-disabledForeground, #858585));
+  --pp-context-low: var(
+    --vscode-panePulse-contextLowForeground,
+    var(--vscode-charts-green, #73c991)
+  );
+  --pp-context-mid: var(
+    --vscode-panePulse-contextMidForeground,
+    var(--vscode-list-warningForeground, #e5a13a)
+  );
+  --pp-context-high: var(
+    --vscode-panePulse-contextHighForeground,
+    var(--vscode-charts-red, #f14c4c)
+  );
+  --pp-peek-accent: var(
+    --vscode-panePulse-peekAccentForeground,
+    var(--vscode-charts-purple, #b48ef0)
+  );
+  --pp-secondary: var(--vscode-descriptionForeground, #9d9d9d);
+  --pp-divider: var(
+    --vscode-sideBarSectionHeader-border,
+    var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35))
+  );
+  --pp-hover-background: var(--vscode-editorHoverWidget-background, #252526);
+  --pp-hover-border: var(--vscode-editorHoverWidget-border, #454545);
+  --pp-font-size: var(--vscode-font-size, 13px);
+  --pp-small-size: calc(var(--vscode-font-size, 13px) - 1px);
+  --pp-row-height: 22px;
+  --pp-inset-start: 10px;
+  --pp-inset-end: 12px;
+  --pp-icon-gap: 8px;
+}
+
+/* ---------------------------------------------------------------- the page */
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  /* VS Code's default track is the editor's background, a stripe in the sidebar; none here. */
+  scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4)) transparent;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #cccccc));
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  font-size: var(--pp-font-size);
+  font-weight: var(--vscode-font-weight, normal);
+}
+
+#list {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding-bottom: 8px;
+  container-type: inline-size;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.empty {
+  padding: 13px 20px;
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------- the counts line */
+
+/* Each bucket drawn, as its count and its word: numbers at full strength, words and dots quiet. */
+.counts {
+  box-sizing: border-box;
+  height: var(--pp-row-height);
+  margin-bottom: 4px;
+  padding: 0 var(--pp-inset-end) 0 var(--pp-inset-start);
+  overflow: hidden;
+  color: var(--pp-secondary);
+  font-size: var(--pp-small-size);
+  line-height: var(--pp-row-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.counts-number {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- buckets and rows */
+
+.bucket + .bucket {
+  margin-top: 4px;
+}
+
+/* Muted sits apart from the buckets above it; alone, it needs no line. */
+.bucket + .bucket[data-bucket='muted'] {
+  margin-top: 6px;
+  padding-top: 3px;
+  border-top: 1px solid var(--pp-divider);
+}
+
+.bucket-head,
+.row {
+  display: grid;
+  align-items: center;
+  box-sizing: border-box;
+  height: var(--pp-row-height);
+  padding: 0 var(--pp-inset-end) 0 var(--pp-inset-start);
+  white-space: nowrap;
+}
+
+.bucket-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  color: var(--pp-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.bucket-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bucket-count {
+  padding-left: var(--pp-icon-gap);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.row {
+  grid-template-columns: 16px minmax(0, 1fr) 3.9em 4.2em 3em;
+  cursor: pointer;
+}
+
+.row:hover {
+  background-color: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground);
+}
+
+.row.active {
+  background-color: var(--vscode-list-inactiveSelectionBackground);
+  color: var(--vscode-list-inactiveSelectionForeground);
+}
+
+.row:focus {
+  outline: none;
+}
+
+.row:focus-visible {
+  outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder, #007fd4));
+  outline-offset: -1px;
+}
+
+.status {
+  width: 16px;
+  height: 16px;
+  justify-self: center;
+}
+
+/* The name's box ends where its text ends, which is where main.ts anchors the peek. */
+.name {
+  box-sizing: border-box;
+  max-width: 100%;
+  justify-self: start;
+  overflow: hidden;
+  padding: 0 var(--pp-icon-gap);
+  text-overflow: ellipsis;
+}
+
+.col {
+  overflow: hidden;
+  color: var(--pp-secondary);
+  font-size: var(--pp-small-size);
+  text-overflow: ellipsis;
+}
+
+.ctx {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: end;
+}
+
+.ctx.c-none {
+  font-weight: normal;
+}
+
+/* A narrow pane drops effort first, then the model; the name and the % always stay. */
+@container (width < 240px) {
+  .row {
+    grid-template-columns: 16px minmax(0, 1fr) 3.9em 3em;
+  }
+
+  .row .effort {
+    display: none;
+  }
+}
+
+@container (width < 190px) {
+  .row {
+    grid-template-columns: 16px minmax(0, 1fr) 3em;
+  }
+
+  .row .model {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- colours by class (P1) */
+
+.s-needsYou {
+  color: var(--pp-needs-you);
+}
+
+.s-unseen {
+  color: var(--pp-unseen);
+}
+
+.s-working {
+  color: var(--pp-working);
+}
+
+.s-idle {
+  color: var(--pp-idle);
+}
+
+.s-muted {
+  color: var(--pp-muted);
+}
+
+.c-low {
+  color: var(--pp-context-low);
+}
+
+.c-mid {
+  color: var(--pp-context-mid);
+}
+
+.c-high {
+  color: var(--pp-context-high);
+}
+
+.c-none {
+  color: var(--pp-secondary);
+}
+
+/* ---------------------------------------------------------------- the peek */
+
+.peek {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  box-sizing: border-box;
+  width: min(260px, calc(100vw - 16px));
+  animation: pp-peek-in 0.1s linear;
+}
+
+.peek[hidden] {
+  display: none;
+}
+
+@keyframes pp-peek-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.peek-card {
+  box-sizing: border-box;
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  padding: 8px 12px 11px;
+  border: 1px solid var(--pp-hover-border);
+  border-radius: 4px;
+  background-color: var(--pp-hover-background);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground, #cccccc));
+  cursor: default;
+  font-size: var(--pp-small-size);
+  line-height: 16px;
+}
+
+/* The pointer back to the row: on the card's top edge below the row, its bottom edge above it,
+ * near the card's left edge, which puts it over the start of the row's name when the card sits
+ * against the pane's right margin. */
+.peek[data-side='below']::before,
+.peek[data-side='above']::before {
+  position: absolute;
+  left: 7px;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border: 1px solid transparent;
+  background-color: var(--pp-hover-background);
+  content: '';
+  transform: rotate(45deg);
+}
+
+.peek[data-side='below']::before {
+  top: -3px;
+  border-top-color: var(--pp-hover-border);
+  border-left-color: var(--pp-hover-border);
+}
+
+.peek[data-side='above']::before {
+  bottom: -3px;
+  border-right-color: var(--pp-hover-border);
+  border-bottom-color: var(--pp-hover-border);
+}
+
+.peek-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+  line-height: 18px;
+}
+
+.peek-name,
+.peek-accent,
+.peek-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Short of room, the accent gives way first: the name is what says whose card this is. */
+.peek-name {
+  flex: 0 1 auto;
+  font-size: var(--pp-font-size);
+  font-weight: 600;
+}
+
+.peek-accent {
+  flex: 0 1000 auto;
+  margin-left: auto;
+  color: var(--pp-peek-accent);
+}
+
+.peek-state {
+  color: var(--pp-secondary);
+}
+
+.peek-prompt {
+  display: -webkit-box;
+  margin-top: 1px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.peek-grid {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  margin: 6px 0 0;
+  line-height: 18px;
+}
+
+.peek-grid dt {
+  color: var(--pp-secondary);
+}
+
+.peek-grid dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.peek-bar {
+  height: 3px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: 2px;
+  background-color: color-mix(in srgb, var(--pp-secondary) 18%, transparent);
+}
+
+/* The width arrives from main.ts (data-pct, through the CSSOM); the colour from c-<level>. */
+.peek-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background-color: currentColor;
+}
+
+/* ---------------------------------------------------------------- dark: the mockup's hierarchy */
+
+/* Names, then columns, then headers and labels: the quietest text a step below the columns. */
+body.vscode-dark .bucket-title,
+body.vscode-dark .bucket-count,
+body.vscode-dark .peek-grid dt {
+  opacity: 0.75;
+}
+
+/* ---------------------------------------------------------------- high contrast */
+
+body.vscode-high-contrast .row:hover {
+  background-color: transparent;
+  outline: 1px dashed var(--vscode-contrastActiveBorder, #f38518);
+  outline-offset: -1px;
+}
+
+body.vscode-high-contrast .row.active {
+  background-color: transparent;
+  outline: 1px solid var(--vscode-contrastActiveBorder, #f38518);
+  outline-offset: -1px;
+}
+
+body.vscode-high-contrast .row:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #f38518);
+  outline-offset: -1px;
+}
+
+body.vscode-high-contrast .peek-bar {
+  outline: 1px solid var(--vscode-contrastBorder, transparent);
+}
+
+/* ---------------------------------------------------------------- reduced motion */
+
+/* The body selector outranks codicon.css's own spin rule, whichever file loads last. */
+body.vscode-reduce-motion .status.codicon-modifier-spin,
+body.vscode-reduce-motion .peek {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .status.codicon-modifier-spin,
+  body .peek {
+    animation: none;
+  }
+}
