@@ -79,13 +79,14 @@ Everything it changes is listed under [What the install changes](#what-the-insta
 
 ### The short road: install the built extension
 
-No clone, no Node, no build. Two steps and a dialog.
+No clone, no build. Two steps and a dialog, and Node on your machine for the hooks to run.
 
 1. **Download `pane-pulse-0.2.0.vsix`** from the [latest release](https://github.com/robs-studio/pane-pulse/releases/latest).
 2. **Install it**: in VS Code, Extensions view → the `...` menu → "Install from VSIX…", and pick that file. From a terminal it is `code --install-extension pane-pulse-0.2.0.vsix`.
 3. **Reload the window** when it suits you, then open the Command Palette and run **Pane Pulse: Install Hooks**. It shows you every change it would make in a read-only document, then asks. Only the **Install** button writes anything.
 
-That is the whole install. The hooks ship inside the extension, so this road needs nothing else.
+That is the whole install. The hooks ship inside the extension, but eight of the nine run `node`, so Node must be on the PATH Claude Code runs its hooks with; without it only the spinner draws.
+Claude Code's own installer does not bring Node with it, so run `node --version` in the terminal you start `claude` from, and if it finds nothing, install Node from [nodejs.org](https://nodejs.org) first.
 
 Two things it cannot do, both of which want the source below: run `prove-local`, the read-only checker that says what is actually installed, and install the hooks without a human to click the dialog. Removing it later needs neither: **Pane Pulse: Uninstall Hooks** is in the same palette, and previews the same way.
 
