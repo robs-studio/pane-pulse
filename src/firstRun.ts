@@ -5,7 +5,9 @@
 // why. So at start-up, while this machine has never had the hooks set up, one notification says
 // so and offers Set it up, Not now and Don't ask again. Eight of the nine hooks run `node`, and
 // Claude Code's native installer does not bring it, so when Node.js cannot be found the question
-// says that too and offers Get Node.js first.
+// says that too and offers Get Node.js first. Get Node.js opens the site and then asks one
+// follow-up, offering Set it up: the hooks can go in while Node.js installs, and they start once
+// it is in and VS Code has restarted.
 //
 // planFirstRun() decides and FirstRunPrompt does what it decided through the host handed in, so
 // node --test holds both with no VS Code. The prompt's whole memory is one small folder in VS
@@ -13,32 +15,41 @@
 // `never-ask`, and one `asked-YYYY-MM-DD` per ask. Eight rules:
 //
 //   1. FIRST RUN MEANS NEVER SET UP. The prompt asks only while this machine has never had the
-//      hooks set up. Any start-up that finds them installed writes `set-up`, and from then on the
-//      prompt never asks again, even after Uninstall Hooks: someone who removed the hooks meant
-//      it, and Install Hooks stays in the Command Palette.
+//      hooks set up. Any start-up that finds them installed writes `set-up`, and so does a Set it
+//      up whose Install Hooks put them in. From then on the prompt never asks again, even after
+//      Uninstall Hooks, run in the same session as the install or any later one: someone who
+//      removed the hooks meant it, and Install Hooks stays in the Command Palette.
 //   2. ONLY A LOCAL WINDOW ASKS. In a remote window (SSH, WSL, Codespaces) the extension runs on
 //      the remote, where Install Hooks would write a VS Code settings file the local window never
-//      reads. A remote window writes nothing and logs why.
-//   3. ONE WINDOW, THE ONE YOU'RE LOOKING AT. An information notification with buttons is not
-//      sticky: it slides into the bell after a few seconds. So only a focused window may claim,
-//      and a window that starts unfocused waits for focus (once per activation), then looks at
+//      reads. A remote window never claims a day and never asks, and logs why. The one thing it
+//      may write is `set-up`, when the remote already has the hooks installed: installed is
+//      weighed before remote (rule 1).
+//   3. ONE WINDOW, THE ONE YOU'RE LOOKING AT. The day has one ask across every window, and it
+//      belongs in the window the person is looking at, not one behind it they may not come back
+//      to. An information notification with buttons is not sticky once it is seen, either: it
+//      slides into the bell a few seconds later. So only a focused window may claim, and a
+//      window that starts unfocused waits for focus (once per activation), then looks at
 //      everything again. A window claims the day by creating `asked-YYYY-MM-DD` with an exclusive
 //      create; the one that creates it asks, and every other one gets EEXIST and stays quiet. A
 //      file rather than the global state, because the global state can lag between windows
 //      (indicator.ts), and an exclusive create is atomic on every OS.
 //   4. THREE ASKS, SPACED, THEN SILENCE. Every ask counts, whatever the answer: Not now, closing
 //      the toast, letting it slide into the bell, Get Node.js, or Set it up followed by Cancel.
-//      The second ask comes no sooner than 3 days after the first, the third no sooner than 7
-//      days after the second, and after the third the prompt never asks again. The `asked-*`
-//      files are kept, never deleted: their count and dates are the whole memory.
+//      Get Node.js and the follow-up after it are one ask: the follow-up claims no day of its
+//      own and adds nothing to the count. The second ask comes no sooner than 3 days after the
+//      first, the third no sooner than 7 days after the second, and after the third the prompt
+//      never asks again. The `asked-*` files are kept, never deleted: their count and dates are
+//      the whole memory.
 //   5. DON'T ASK AGAIN IS FOREVER. It writes `never-ask`, no later start-up asks, and a note in
 //      the status bar says where Install Hooks still is.
 //   6. SET IT UP CHANGES NOTHING ITSELF. It runs Install Hooks, whose preview and modal confirm
-//      decide everything. The prompt never writes outside its own folder: never the hooks' root,
-//      never Claude Code's settings, never VS Code's.
-//   7. LOOK AGAIN BEFORE ASKING. Whether the hooks are installed is read again right before the
-//      notification shows, so a window that another window, or the command line, has just set up
-//      does not ask.
+//      decide everything. Once that returns, the prompt reads whether the hooks are installed and
+//      writes `set-up` only if they are (rule 1); that file is in its own folder, like the rest.
+//      The prompt never writes outside that folder: never the hooks' root, never Claude Code's
+//      settings, never VS Code's.
+//   7. LOOK AGAIN BEFORE ASKING. Whether the hooks are installed is read again right before each
+//      notification shows, the question and the follow-up after Get Node.js, so a window that
+//      another window, or the command line, has just set up does not ask.
 //   8. NEVER THROWS, NEVER BLOCKS. run() is started with `void` after activation and never
 //      rejects. A storage failure, a Node check that fails (nodeCheck.ts gives up after 3 s), or
 //      a notification that cannot show is logged and dropped, and a folder that cannot be read or
@@ -86,7 +97,11 @@ export function logRemote(name: string | undefined): string {
 
 export const LOG_WAITING_FOR_FOCUS = `${LOG_PREFIX}waiting for this window to be focused`;
 
-/** The button the person chose, or `nothing` for a notification closed or left to fade. */
+/**
+ * The button the person chose, or `nothing` for a notification closed without one. A toast that
+ * fades into the notification centre has not answered yet: a later click there still resolves
+ * with its button, and that is the answer logged.
+ */
 export function logAnswer(answer: string | undefined): string {
   return `${LOG_PREFIX}answered ${answer ?? 'nothing'}`;
 }
@@ -108,6 +123,11 @@ export const ASK_WITHOUT_NODE =
   "Pane Pulse isn't marking your tabs yet. It needs to add hooks to Claude Code, and those hooks " +
   "run on Node.js, which this machine doesn't seem to have.";
 
+/** The follow-up after Get Node.js: the hooks can go in now, and start once Node.js is in. */
+export const ASK_AFTER_NODE =
+  'Pane Pulse can add its hooks now, while Node.js installs. They start marking your tabs once ' +
+  'Node.js is installed and VS Code has restarted.';
+
 /** The status-bar note after Don't ask again (rule 5). */
 export const WONT_ASK_NOTE = 'Pane Pulse won\'t ask again. Run "Pane Pulse: Install Hooks" whenever you want it.';
 
@@ -119,6 +139,8 @@ const BUTTONS_WITHOUT_NODE: readonly string[] = Object.freeze([
   NOT_NOW,
   DONT_ASK_AGAIN,
 ]);
+/** The follow-up's buttons: Set it up, or leave it for a later ask. */
+const BUTTONS_AFTER_NODE: readonly string[] = Object.freeze([SET_IT_UP, NOT_NOW]);
 
 // ------------------------------------------------------------------------------ the days
 
@@ -331,7 +353,10 @@ export type FirstRunHost = {
   now(): Date;
   /** Whether `node` answers; anything but false reads as found. */
   nodeFound(): Promise<boolean>;
-  /** Shows the notification; resolves the button chosen, or undefined when it was closed. */
+  /**
+   * Shows the notification; resolves the button chosen, or undefined when it was closed. One
+   * that has faded into the notification centre is still pending until it is clicked or closed.
+   */
   ask(message: string, buttons: readonly string[]): Promise<string | undefined>;
   /** Runs Install Hooks, with its own preview and confirm. */
   runInstall(): Promise<unknown>;
@@ -344,6 +369,13 @@ export type FirstRunHost = {
 
 /** A step that failed, already logged. */
 const FAILED = Symbol('failed');
+
+/** The hooks turned out to be in after the start-up's look: mark the machine set up (rule 1). */
+const MARK_SET_UP: FirstRunPlan = Object.freeze({
+  markSetUp: true,
+  ask: false,
+  log: LOG_MARKED_SET_UP,
+});
 
 /** The day to claim and the plan made from what the start-up read. */
 type Look = Readonly<{ today: string; plan: FirstRunPlan }>;
@@ -359,7 +391,7 @@ export class FirstRunPrompt {
   /**
    * Looks, and asks if the rules allow: 'asked' once the question has been put (whatever came of
    * it), 'skipped' otherwise. Never rejects. It stays pending while it waits for focus or for an
-   * answer, and resolves once the answer has been acted on.
+   * answer, and resolves once the answer, and after Get Node.js the follow-up's, has been acted on.
    */
   async run(): Promise<'asked' | 'skipped'> {
     try {
@@ -376,7 +408,7 @@ export class FirstRunPrompt {
     if (look === FAILED) return 'skipped';
     if (!look.plan.ask) return this.#settle(look.plan);
 
-    // Rule 3: a notification in a window nobody is looking at fades unseen, and still counts.
+    // Rule 3: the day's one ask goes to the window the person is looking at, not one behind it.
     const focused = this.#try('checking whether this window is focused', () => host.focused());
     if (focused === FAILED) return 'skipped';
     if (focused !== true) {
@@ -403,11 +435,7 @@ export class FirstRunPrompt {
     const found = await node;
 
     // Rule 7: set up by another window, or from the command line, since the look above.
-    const installed = this.#try('looking for the install record', () => host.installed());
-    if (installed === FAILED) return 'skipped';
-    if (installed === true) {
-      return this.#settle(Object.freeze({ markSetUp: true, ask: false, log: LOG_MARKED_SET_UP }));
-    }
+    if (this.#markIfInstalled() !== false) return 'skipped';
 
     const buttons = found ? BUTTONS_WITH_NODE : BUTTONS_WITHOUT_NODE;
     this.#log(plan.log);
@@ -421,15 +449,54 @@ export class FirstRunPrompt {
 
     // Rule 4: the claim above is the count, so Not now needs nothing more.
     if (chosen === SET_IT_UP) {
-      await this.#tryAsync('running Install Hooks', () => host.runInstall());
+      await this.#setItUp();
     } else if (chosen === GET_NODE) {
       await this.#tryAsync('opening nodejs.org', () => host.openNodeSite());
+      await this.#followUp();
     } else if (chosen === DONT_ASK_AGAIN) {
       const kept = this.#try('remembering not to ask again', () => host.store.markNever());
       // The note promises no more asks, so it shows only once that is written down.
       if (kept !== FAILED) this.#try('showing the note', () => host.note(WONT_ASK_NOTE));
     }
     return 'asked';
+  }
+
+  /**
+   * Set it up, from the question or the follow-up: runs Install Hooks, then, once it has returned
+   * or failed, looks again, so hooks it put in mark this machine set up now (rules 1 and 6), and
+   * an Uninstall Hooks later in this same session never brings the question back.
+   */
+  async #setItUp(): Promise<void> {
+    await this.#tryAsync('running Install Hooks', () => this.#host.runInstall());
+    this.#markIfInstalled();
+  }
+
+  /**
+   * After Get Node.js, one follow-up in the same ask: it claims no day and adds nothing to the
+   * count (rule 4). It looks again first (rule 7), and its Set it up is the question's.
+   */
+  async #followUp(): Promise<void> {
+    if (this.#markIfInstalled() !== false) return;
+    const answer = await this.#tryAsync('showing the follow-up', () =>
+      this.#host.ask(ASK_AFTER_NODE, BUTTONS_AFTER_NODE),
+    );
+    if (answer === FAILED) return;
+    const chosen = typeof answer === 'string' ? answer : undefined;
+    this.#log(logAnswer(chosen));
+    if (chosen === SET_IT_UP) await this.#setItUp();
+  }
+
+  /**
+   * Reads whether the hooks are installed now. True when they are, and this machine is then
+   * marked set up (rule 1), a mark that fails being logged and dropped; false when they are not;
+   * FAILED, already logged, when the read itself failed.
+   */
+  #markIfInstalled(): boolean | typeof FAILED {
+    const installed = this.#try('looking for the install record', () => this.#host.installed());
+    if (installed === FAILED) return FAILED;
+    if (installed !== true) return false;
+    this.#settle(MARK_SET_UP);
+    return true;
   }
 
   /** What this start-up knows, and the plan made from it; FAILED once a read has failed. */
