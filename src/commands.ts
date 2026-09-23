@@ -43,6 +43,7 @@ import {
   restoreQuestion,
 } from './installer.ts';
 import type { BackupChoice, Proposal, RestorePick } from './installer.ts';
+import { findNode, withNodeNote } from './nodeCheck.ts';
 
 /** The three command ids package.json contributes; installer.test.mjs holds the two in step. */
 export const INSTALL_HOOKS_COMMAND = 'panePulse.installHooks';
@@ -119,12 +120,17 @@ async function guarded(what: string, log: Log, run: () => Promise<void>): Promis
   }
 }
 
-/** Preview, ask, and commit only on the proposal's own yes. */
+/**
+ * Preview, ask, and commit only on the proposal's own yes. Install alone hands in `nodeCheck`,
+ * and its closing message gains the Node.js sentence when Node could not be found; a no never
+ * waits for it.
+ */
 async function askAndCommit(
   proposal: Proposal,
   previewName: string,
   previews: PreviewDocuments,
   log: Log,
+  nodeCheck?: Promise<boolean>,
 ): Promise<void> {
   log(`${LOG_PREFIX}asking before ${proposal.plan.mode}:\n${proposal.preview}`);
   await previews.show(previewName, proposal.preview);
@@ -138,13 +144,17 @@ async function askAndCommit(
     return;
   }
   const result = commit(proposal.plan);
-  const message = describeCommit(result);
+  const message =
+    nodeCheck === undefined ? describeCommit(result) : withNodeNote(describeCommit(result), await nodeCheck);
   log(`${LOG_PREFIX}${message}`);
   tell((text) => window.showInformationMessage(text), message, log);
 }
 
 async function installHooks(hookDir: string, env: NodeJS.ProcessEnv, previews: PreviewDocuments, log: Log): Promise<void> {
-  await askAndCommit(proposeInstall(resolveContext(hookDir, env)), 'Pane Pulse install preview.txt', previews, log);
+  // Started first, so it runs while the preview is read; findNode() never rejects, so a no or a
+  // failure that leaves it unread leaves nothing unhandled.
+  const nodeCheck = findNode();
+  await askAndCommit(proposeInstall(resolveContext(hookDir, env)), 'Pane Pulse install preview.txt', previews, log, nodeCheck);
 }
 
 async function uninstallHooks(env: NodeJS.ProcessEnv, previews: PreviewDocuments, log: Log): Promise<void> {

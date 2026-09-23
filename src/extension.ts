@@ -69,15 +69,19 @@
 // to do. installHooks, uninstallHooks and restoreBackups are registered by commands.ts, over
 // installer.ts; this file registers the pane list's eleven commands (show the panes, open the
 // settings, and the row menu's nine) and hands the rest over. Every one of those handlers runs
-// through guarded(), which logs a failure and never throws.
+// through guarded(), which logs a failure and never throws. Once Install Hooks is registered,
+// the first-run prompt is started with `void`: firstRun.ts decides everything it does and never
+// throws, and this file only hands it VS Code's side (the notification, the window's focus,
+// Install Hooks itself and a folder of its own).
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 
 import type { ExtensionContext, Terminal } from 'vscode';
-import { ConfigurationTarget, commands, env, window, workspace } from 'vscode';
+import { ConfigurationTarget, Uri, commands, env, window, workspace } from 'vscode';
 
 import { resolveRoot } from './backup.ts';
 import { claudeConfigDir, readRegistry } from './claudeFiles.ts';
-import { registerCommands } from './commands.ts';
+import { INSTALL_HOOKS_COMMAND, registerCommands } from './commands.ts';
 import { PaneController } from './controller.ts';
 import type { DiscoveredPane, Timer } from './controller.ts';
 import type { PaneState } from './decision.ts';
@@ -85,6 +89,7 @@ import { stripSpinner } from './details.ts';
 import { DetailsStore } from './detailsStore.ts';
 import type { DetailsTarget } from './detailsStore.ts';
 import { EventSource } from './events.ts';
+import { FirstRunPrompt, fileStore } from './firstRun.ts';
 import {
   DISABLE_INDICATOR_SETTING,
   INDICATOR_KEY,
@@ -92,8 +97,10 @@ import {
   IndicatorSync,
   KEPT_INDICATOR_KEY,
 } from './indicator.ts';
+import { hasInstallRecord } from './installer.ts';
 import { Mapper } from './mapping.ts';
 import { LOG_PREFIX as MUTE_LOG_PREFIX, MuteMarkers, controllerMarkers, isAlive } from './mute.ts';
+import { NODE_SITE, findNode } from './nodeCheck.ts';
 import { CONTEXT_THRESHOLDS, badgeOf, buildPanel, renderPanel } from './panel.ts';
 import type { PanelOptions } from './panel.ts';
 import { LOG_PREFIX, PanelView } from './panelView.ts';
@@ -789,6 +796,32 @@ export function activate(context: ExtensionContext): void {
   );
 
   context.subscriptions.push(...registerCommands(context, log));
+
+  // The first-run prompt (firstRun.ts): once a day at most, one window, only while this machine
+  // has never had the hooks set up. Set it up runs Install Hooks, whose preview and confirm decide.
+  const firstRun = new FirstRunPrompt({
+    installed: () => hasInstallRecord(root),
+    remote: () => env.remoteName,
+    focused: () => window.state.focused,
+    whenFocused: () =>
+      new Promise<void>((resolve) => {
+        const watch = window.onDidChangeWindowState((state) => {
+          if (!state.focused) return;
+          watch.dispose();
+          resolve();
+        });
+        context.subscriptions.push(watch);
+      }),
+    store: fileStore(join(context.globalStorageUri.fsPath, 'first-run')),
+    now: () => new Date(),
+    nodeFound: () => findNode(),
+    ask: (message, buttons) => Promise.resolve(window.showInformationMessage(message, ...buttons)),
+    runInstall: () => Promise.resolve(commands.executeCommand(INSTALL_HOOKS_COMMAND)),
+    openNodeSite: () => Promise.resolve(env.openExternal(Uri.parse(NODE_SITE))),
+    note,
+    log,
+  });
+  void firstRun.run();
 
   for (const terminal of window.terminals) watchProcessId(terminal);
   events.start();
