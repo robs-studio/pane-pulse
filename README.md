@@ -101,6 +101,7 @@ It asks only in the window you're looking at, because that is where the question
 It asks at most three times: the second no sooner than 3 days after the first, the third no sooner than 7 days after the second.
 Each time counts toward the three, whatever you answer, **Not now** and closing the notification included.
 **Don't ask again** is permanent.
+The Panes panel still says the same at its top until the hooks are in, with its own **Set it up**.
 Whatever you answer, **Pane Pulse: Install Hooks** is always in the Command Palette, and it is what **Set it up** runs.
 It remembers your answers per VS Code profile, so **Don't ask again** in one profile does not quiet another.
 The hooks install itself writes the default profile's VS Code settings unless `PANE_PULSE_VSCODE_SETTINGS` points elsewhere (see [What you need](#what-you-need)), so in any other profile the tabs show no marks.
@@ -344,6 +345,12 @@ A row leaves when its Claude session ends, when another Claude session starts in
 A `claude` that crashes or is killed fires no hook, so every pane's `claude` is checked every five seconds, and a dead one's row leaves with its tab mark cleared.
 The **Pane Pulse** output channel logs what the extension did and why.
 
+While the hooks aren't set up, a notice at the top of the panel says "Pane Pulse isn't marking your tabs yet", and its **Set it up** button runs **Pane Pulse: Install Hooks**, which previews and asks first as always.
+While Pane Pulse can't find Node.js, a line there says so, beside **Get Node.js**, which opens [nodejs.org](https://nodejs.org).
+The notice reads the real state each time the panel draws, not what the first-run question remembers, so **Don't ask again** does not hide it, and it comes back after **Pane Pulse: Uninstall Hooks**.
+It never pops up or notifies, and each of its lines goes by itself as soon as what it asks for is in.
+Like the first-run question, it shows only in a local window, never in one connected over SSH, to WSL or to a Codespace.
+
 ### The five headings
 
 Panes are grouped under five headings, shown in capitals and always in this order, each with a count.
@@ -585,6 +592,7 @@ npm run package        # build, then write the .vsix
 | `src/view.ts` | the words, the order and the command ids the panel and the status bar share |
 | `src/panel.ts` | the Panes panel's headings, columns, peek and menu, as HTML |
 | `src/panelView.ts` | the webview that shows the panel in the sidebar, and its badge |
+| `src/setupNotice.ts` | the notice at the top of the panel while the hooks or Node.js are missing, and its two buttons |
 | `src/webview/main.ts`, `src/webview/peek.ts` | the panel's own script: clicks, keys, and where the peek goes |
 | `media/panel.css` | the panel's styles, in VS Code's theme colours |
 | `src/claudeFiles.ts` | finds and reads Claude Code's session registry and transcripts, read-only |
@@ -592,6 +600,8 @@ npm run package        # build, then write the .vsix
 | `src/detailsStore.ts` | keeps each pane's details current, reading only what has changed |
 | `src/statusbar.ts` | the status bar item |
 | `src/commands.ts` | the Install Hooks, Uninstall Hooks and Restore Backups commands |
+| `src/firstRun.ts` | the first-run question that offers to set up the hooks: when it asks, and what it remembers of the answers |
+| `src/nodeCheck.ts` | whether Node.js can be found, for the first-run question, Install Hooks' closing message and the panel's notice |
 | `src/decision.ts` | the typed reader of the decision table |
 | `src/indicator.ts` | the Terminal setting that hides VS Code's environment change triangle, and puts it back |
 | `src/version.ts` | the version string the extension and its tests share |

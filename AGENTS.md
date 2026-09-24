@@ -130,6 +130,8 @@ Tell the person now, before it can appear, to choose **Not now**: step 5 does th
 If the extension cannot find Node.js, the notification says so and offers **Get Node.js** as well, and **Not now** is still the answer: Node is settled with the person at step 1, never installed on your own initiative.
 If step 1 found `node` and the notification still says it is missing, VS Code could not find it on its own PATH: tell the person, because the hooks need `node` on the PATH Claude Code itself uses (step 1's table).
 Once step 5 has installed the hooks, the notification does not come back.
+Until then, the Panes panel also shows a notice at its top, `Pane Pulse isn't marking your tabs yet`, with its own **Set it up**: leave it, it goes by itself once step 5 is done.
+If the notice also offers **Get Node.js**, it is the missing-Node case above, and that line stays until VS Code can find `node`.
 
 ## Step 5. The hooks: preview, ask, then install
 

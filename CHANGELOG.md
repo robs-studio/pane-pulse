@@ -8,6 +8,7 @@ What changed in each release of Pane Pulse, newest first.
 - It asks at most three times, days apart, and never again once the hooks are set up.
 - When Pane Pulse can't find Node.js, the prompt says so and offers **Get Node.js**, then **Set it up**, so the hooks can go in while Node.js installs.
 - **Install Hooks** says so too: when it can't find Node.js, its closing message says to install it and restart VS Code.
+- The Panes panel says what's missing: while the hooks aren't set up, or Pane Pulse can't find Node.js, a notice at its top offers **Set it up** or **Get Node.js**, and goes as soon as they're in.
 - Pane Pulse is now on the VS Code Marketplace.
 
 ## 0.2.0 - 2026-09-22
