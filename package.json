@@ -2,12 +2,12 @@
   "name": "pane-pulse",
   "displayName": "Pane Pulse",
   "description": "Marks a Claude Code terminal tab thinking while it works and needs-you when it finishes in a background pane.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "icon": "media/icon.png",
   "publisher": "robs-studio",
   "author": {
     "name": "Rob Kolts",
-    "email": "rob@robkolts.com"
+    "email": "rob@robs-studio.com"
   },
   "license": "MIT",
   "repository": {
@@ -17,13 +17,16 @@
   "bugs": {
     "url": "https://github.com/robs-studio/pane-pulse/issues"
   },
-  "homepage": "https://github.com/robs-studio/pane-pulse#readme",
+  "homepage": "https://robs-studio.com/pane-pulse",
   "keywords": [
     "claude",
     "claude code",
     "terminal",
     "tabs",
-    "agents"
+    "agents",
+    "claude-code",
+    "status",
+    "ai"
   ],
   "type": "module",
   "main": "./dist/extension.cjs",
@@ -32,6 +35,7 @@
     "node": ">=22.18"
   },
   "categories": [
+    "AI",
     "Other"
   ],
   "capabilities": {
@@ -267,7 +271,7 @@
           "type": "null",
           "default": null,
           "order": 5,
-          "markdownDescription": "This VS Code extension was made by Rob Kolts, [rob@robkolts.com](mailto:rob@robkolts.com). Built with Glitch. MIT licence."
+          "markdownDescription": "This VS Code extension was made by Rob Kolts, [rob@robs-studio.com](mailto:rob@robs-studio.com). Website: [robs-studio.com/pane-pulse](https://robs-studio.com/pane-pulse). Built with Glitch. MIT licence."
         }
       }
     },

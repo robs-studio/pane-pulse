@@ -61,7 +61,12 @@ Check the platform before promising anything:
 
 The installer's command line and the verifier live in the repository, not in the packaged extension, so you need the source even if a `.vsix` is already to hand.
 
-(If the person would rather not have a build on their machine at all, there is a shorter road they can walk themselves: download the `.vsix` from the project's latest release, install it, and run **Pane Pulse: Install Hooks** from the Command Palette, which previews and asks. Offer it, then stop; the dialog is theirs to click, not yours.) The installer itself does ship inside the extension, but the road that drives it there is a dialog only a human can click.
+(If the person would rather not have a build on their machine at all, there are two shorter roads they can walk themselves.
+The VS Code Marketplace is one click: **Install** on Pane Pulse in VS Code's Extensions view, or `code --install-extension robs-studio.pane-pulse`, and VS Code keeps it up to date from then on.
+Pane Pulse then offers **Set it up**, or they run **Pane Pulse: Install Hooks** from the Command Palette; either previews and asks.
+The other road is the release: download the `.vsix` from the project's latest release, install it, and run **Pane Pulse: Install Hooks** from the Command Palette, which previews and asks.
+Offer either, then stop; the dialog is theirs to click, not yours.)
+The installer itself does ship inside the extension, but the road that drives it there is a dialog only a human can click.
 
 ```sh
 git clone https://github.com/robs-studio/pane-pulse.git "$HOME/pane-pulse"
@@ -82,7 +87,7 @@ npm --prefix "<repo>" run package
 ```
 
 `npm run package` builds first, then writes `pane-pulse-<version>.vsix` into `<repo>`.
-Expect a final line like `DONE  Packaged: <repo>/pane-pulse-0.2.0.vsix`.
+Expect a final line like `DONE  Packaged: <repo>/pane-pulse-0.2.1.vsix`.
 
 
 ## Step 4. Install the extension into VS Code
@@ -114,10 +119,17 @@ code --install-extension "<repo>/pane-pulse-<version>.vsix" --force
 
 VS Code leaves the old version's folder behind under `~/.vscode/extensions/` and marks it obsolete; it is safe to delete once `code --list-extensions --show-versions` shows only the version you want.
 
-This step changes nothing outside `~/.vscode/extensions/`.
+This step changes nothing outside `~/.vscode/extensions/` but one folder: once the extension runs, it keeps a small `first-run` folder in VS Code's global storage folder for the extension, where the set-up notification below remembers when it asked and what it was told.
+That folder is `globalStorage/robs-studio.pane-pulse/first-run`, beside VS Code's user `settings.json`; AGENT-UNINSTALL.md gives its full path on each platform.
 
 The extension loads when VS Code next starts, or when the person runs **Developer: Reload Window**.
 **Do not reload their window on your own initiative**: a reload restarts every terminal-hosted agent in that window, including possibly you. Tell them, and let them choose the moment.
+
+When the extension loads, VS Code may show Pane Pulse's own set-up notification, `Pane Pulse isn't marking your tabs yet`, with **Set it up**, **Not now** and **Don't ask again**.
+Tell the person now, before it can appear, to choose **Not now**: step 5 does the same install, with a dry run they see and approve first.
+If the extension cannot find Node.js, the notification says so and offers **Get Node.js** as well, and **Not now** is still the answer: Node is settled with the person at step 1, never installed on your own initiative.
+If step 1 found `node` and the notification still says it is missing, VS Code could not find it on its own PATH: tell the person, because the hooks need `node` on the PATH Claude Code itself uses (step 1's table).
+Once step 5 has installed the hooks, the notification does not come back.
 
 ## Step 5. The hooks: preview, ask, then install
 

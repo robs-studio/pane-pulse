@@ -172,7 +172,18 @@ If VS Code is still running with the extension loaded, it may recreate an empty 
 
 **Either settings key the uninstall preview reported as "left alone"**, because it no longer reads what the install wrote: someone changed it after installing, so the uninstall will not touch it. Read those lines out of the preview and offer to put them back by hand.
 
-**Left behind by design, and yours to clear by hand**: `<root>` itself with `backups/`, `events/` and `mute/` (step 7); the `panePulse.*` settings keys (step 6); the installed extension (step 5); and `terminal.integrated.environmentChangesIndicator` if the checkbox was still ticked when the extension went (step 1, which is why it comes first).
+**Left behind by design, and yours to clear by hand**: `<root>` itself with `backups/`, `events/` and `mute/` (step 7); the `panePulse.*` settings keys (step 6); the installed extension (step 5); the extension's `first-run` folder in VS Code's global storage (below); and `terminal.integrated.environmentChangesIndicator` if the checkbox was still ticked when the extension went (step 1, which is why it comes first).
+
+The `first-run` folder is where the extension's set-up notification remembers what it asked and was told: `set-up`, `never-ask`, and one `asked-<date>` per ask.
+It is a folder on disk, apart from the value step 1 is about, and VS Code keeps an extension's global storage folder after the extension is removed, so step 5 does not take it away.
+It is harmless where it is, and while it holds `set-up` or `never-ask`, a reinstall on this machine does not ask again.
+If the person wants no trace left, delete it with their yes once the window has reloaded, since a running copy of the extension can still write there:
+
+- macOS: `~/Library/Application Support/Code/User/globalStorage/robs-studio.pane-pulse/first-run`
+- Windows: `%APPDATA%\Code\User\globalStorage\robs-studio.pane-pulse\first-run`
+- Linux: `~/.config/Code/User/globalStorage/robs-studio.pane-pulse/first-run`
+
+Those are the default profile's paths.
 
 ## Reinstalling afterwards
 

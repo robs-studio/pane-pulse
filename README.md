@@ -76,14 +76,47 @@ One more rule covers a process id the system hands out again: a `claude` that ha
 Pane Pulse has two halves and **both** must be installed, or it does nothing: the **extension**, which draws the panel and clears marks, and the **hooks**, which are entries in Claude Code's own settings that write the marks. Installing the extension alone leaves a panel that lists nothing.
 
 Everything it changes is listed under [What the install changes](#what-the-install-changes), every change is backed up and recorded first, and [Uninstall](#uninstall) puts it all back.
+The extension also keeps one small folder of its own, for the question it asks at first run, described under [What the extension keeps](#what-the-extension-keeps).
+
+### From the Marketplace
+
+The easiest road: three steps, and VS Code keeps it up to date.
+
+1. **Install the extension.**
+   In VS Code, open the Extensions view, search for **Pane Pulse** and click **Install**.
+   From a terminal it is `code --install-extension robs-studio.pane-pulse`.
+   Its page is [Pane Pulse on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=robs-studio.pane-pulse).
+2. **Set up the hooks.**
+   Pane Pulse asks, in a notification, to set up its hooks: click **Set it up**.
+   It shows you every change it would make in a read-only document, then asks you to confirm.
+   Only the **Install** button writes anything.
+3. **Have Node.js on the machine.**
+   Eight of the nine hooks run on Node.js, and Claude Code's own installer does not bring it.
+   If Pane Pulse cannot find Node, its question says so and offers **Get Node.js**, which opens [nodejs.org](https://nodejs.org).
+   It then offers **Set it up** as well: the hooks can go in while Node installs, and they start marking your tabs once Node is installed and VS Code has restarted.
+
+Pane Pulse asks only until the hooks have been set up once on this machine, and then never again, even if you later remove them with **Pane Pulse: Uninstall Hooks**.
+It asks only in a local window, never in one connected over SSH, to WSL or to a Codespace.
+It asks only in the window you're looking at, because that is where the question belongs: a window that starts while you're looking elsewhere waits until you come to it, and with several windows open, only one of them asks.
+It asks at most three times: the second no sooner than 3 days after the first, the third no sooner than 7 days after the second.
+Each time counts toward the three, whatever you answer, **Not now** and closing the notification included.
+**Don't ask again** is permanent.
+Whatever you answer, **Pane Pulse: Install Hooks** is always in the Command Palette, and it is what **Set it up** runs.
+It remembers your answers per VS Code profile, so **Don't ask again** in one profile does not quiet another.
+The hooks install itself writes the default profile's VS Code settings unless `PANE_PULSE_VSCODE_SETTINGS` points elsewhere (see [What you need](#what-you-need)), so in any other profile the tabs show no marks.
+Profiles are a known gap that 0.2.1 does not close.
 
 ### The short road: install the built extension
 
-No clone, no build. Two steps and a dialog, and Node on your machine for the hooks to run.
+No clone, no build.
+Three steps, and Node on your machine for the hooks to run.
 
-1. **Download `pane-pulse-0.2.0.vsix`** from the [latest release](https://github.com/robs-studio/pane-pulse/releases/latest).
-2. **Install it**: in VS Code, Extensions view → the `...` menu → "Install from VSIX…", and pick that file. From a terminal it is `code --install-extension pane-pulse-0.2.0.vsix`.
-3. **Reload the window** when it suits you, then open the Command Palette and run **Pane Pulse: Install Hooks**. It shows you every change it would make in a read-only document, then asks. Only the **Install** button writes anything.
+1. **Download `pane-pulse-0.2.1.vsix`** from the [latest release](https://github.com/robs-studio/pane-pulse/releases/latest).
+2. **Install it**: in VS Code, Extensions view → the `...` menu → "Install from VSIX…", and pick that file. From a terminal it is `code --install-extension pane-pulse-0.2.1.vsix`.
+3. **Reload the window** when it suits you, then install the hooks.
+   Pane Pulse offers to do it, as it does from the Marketplace: click **Set it up**, or open the Command Palette and run **Pane Pulse: Install Hooks**, which is the same thing.
+   It shows you every change it would make in a read-only document, then asks.
+   Only the **Install** button writes anything.
 
 That is the whole install. The hooks ship inside the extension, but eight of the nine run `node`, so Node must be on the PATH Claude Code runs its hooks with; without it only the spinner draws.
 Claude Code's own installer does not bring Node with it, so run `node --version` in the terminal you start `claude` from, and if it finds nothing, install Node from [nodejs.org](https://nodejs.org) first.
@@ -105,7 +138,8 @@ Show me the dry run and wait for my yes before you change any settings.
 
 ### Install by hand
 
-Pane Pulse is not on the Marketplace: you build the `.vsix` yourself, which takes about a minute. **Keep the folder you clone into**: the hook installer, the verifier and the uninstaller all live in it.
+Building it yourself is for changing it, or for the command-line installer and `prove-local`, the read-only checker; the `.vsix` takes about a minute to build.
+**Keep the folder you clone into**: the hook installer, the verifier and the uninstaller all live in it.
 
 **1. Get the source.**
 
@@ -138,7 +172,7 @@ The extension loads when VS Code next starts, or on **Developer: Reload Window**
 
 **3. Install the hooks.**
 
-Open the Command Palette and run **Pane Pulse: Install Hooks**.
+Open the Command Palette and run **Pane Pulse: Install Hooks**, or click **Set it up** if Pane Pulse has offered it, which runs the same command.
 It opens the installer's preview of every change in a read-only document, then asks in a dialog.
 Only the dialog's **Install** button writes anything.
 If either settings file changes between the preview and your answer, the install refuses and asks you to run it again: Claude Code rewrites its own settings file when you grant a permission in any pane, and a yes to one preview is not a yes to another.
@@ -244,7 +278,21 @@ Inside a subagent every one of these does nothing, so only the main thread moves
 Its `compact` and `fork` sources are not registered, so a compaction in the middle of a turn never touches a spinner.
 `idle_prompt` notifications are deliberately not registered: one fires after about a minute of idling, which is exactly a finished pane you have not read, and as a waiting mark it would turn every unread pane into one that clicking can never clear.
 
+## What the extension keeps
+
+Beside the hooks install, the extension keeps one small folder of its own, the memory of its first-run question: a `first-run` folder in the storage VS Code gives each extension.
+It holds an `asked-<date>` file for each time the question was asked, `never-ask` after **Don't ask again**, and `set-up` once the hooks have been set up on this machine.
+Only the question reads or writes it, and it is left behind when you remove the extension, because VS Code keeps an extension's storage after it is uninstalled.
+In the default profile it is:
+
+- macOS: `~/Library/Application Support/Code/User/globalStorage/robs-studio.pane-pulse/first-run`
+- Windows: `%APPDATA%\Code\User\globalStorage\robs-studio.pane-pulse\first-run`
+- Linux: `~/.config/Code/User/globalStorage/robs-studio.pane-pulse/first-run`
+
 ## Updating
+
+Installed from the Marketplace, Pane Pulse is updated by VS Code for you.
+From a clone, update it this way:
 
 ```sh
 git pull
@@ -550,7 +598,8 @@ npm run package        # build, then write the .vsix
 
 ## About
 
-This VS Code extension was made by Rob Kolts, rob@robkolts.com.
+This VS Code extension was made by Rob Kolts, rob@robs-studio.com.
+Website: [robs-studio.com/pane-pulse](https://robs-studio.com/pane-pulse).
 Built with Glitch.
 Released under the MIT licence; see `LICENSE`.
 
