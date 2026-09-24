@@ -1,11 +1,13 @@
 // The Panes panel's VS Code half: the webview view in the Pane Pulse sidebar, the page it loads,
-// and the two messages that page sends back.
+// and the three messages that page sends back.
 //
 // Nothing the panel shows is decided here. panel.ts renders the whole list as one string of HTML,
 // and webview/main.ts swaps that string in, places the peek and turns a click into a message. This
 // file gives VS Code a page to load it into (the shell: a Content Security Policy, the codicon and
 // panel stylesheets, the script), posts each render to it, puts the badge on the activity-bar
-// icon, and hands a row's click back to the wiring through the `open` it was built with. So it is
+// icon, and hands a row's click back to the wiring through the `open` it was built with. A press on
+// the setup notice's button goes back the same way, through `setup`, but only when the action it
+// names is one setupNotice.ts's isSetupAction() accepts; any other is logged and dropped. So it is
 // checked by typecheck, by the build and by the manual gate: logic added here is logic no unit
 // test reaches.
 //
@@ -44,6 +46,8 @@ import type { Disposable, Event, ViewBadge, Webview, WebviewView, WebviewViewPro
 import { EventEmitter, Uri } from 'vscode';
 
 import { escapeHtml } from './panel.ts';
+import { isSetupAction } from './setupNotice.ts';
+import type { SetupAction } from './setupNotice.ts';
 import { VIEW_ID } from './view.ts';
 
 /** Every line this module logs opens with this, as the other modules' lines do. */
@@ -52,9 +56,13 @@ export const LOG_PREFIX = 'pane-pulse panel: ';
 /** The one message this file posts: the whole list, as HTML. */
 const RENDER_MESSAGE = 'render';
 
-/** The page's two messages: it can take a render, and a row was clicked or had Enter pressed. */
+/**
+ * The page's three messages: it can take a render, a row was clicked or had Enter pressed, and a
+ * button on the setup notice was pressed.
+ */
 const READY_MESSAGE = 'ready';
 const OPEN_MESSAGE = 'open';
+const SETUP_MESSAGE = 'setup';
 
 /** The folder the page loads everything from, and the one local resource root it is given. */
 const DIST_DIRNAME = 'dist';
@@ -85,6 +93,8 @@ export type PanelViewOptions = Readonly<{
   extensionUri: Uri;
   /** A row was clicked, or had Enter pressed: the wiring opens that pane. Named by its id. */
   open: (id: string) => void;
+  /** A button on the setup notice was pressed: the wiring runs the action it names. */
+  setup: (action: SetupAction) => void;
   /** One line to the output channel. */
   log: (line: string) => void;
 }>;
@@ -124,6 +134,7 @@ export class PanelView implements WebviewViewProvider, Disposable {
 
   readonly #extensionUri: Uri;
   readonly #open: (id: string) => void;
+  readonly #setup: (action: SetupAction) => void;
   readonly #log: (line: string) => void;
   readonly #visibility = new EventEmitter<boolean>();
 
@@ -146,6 +157,7 @@ export class PanelView implements WebviewViewProvider, Disposable {
   constructor(options: PanelViewOptions) {
     this.#extensionUri = options.extensionUri;
     this.#open = options.open;
+    this.#setup = options.setup;
     const log = options.log;
     this.#log = (line: string): void => {
       try {
@@ -255,7 +267,10 @@ export class PanelView implements WebviewViewProvider, Disposable {
     this.#fireVisibility(false);
   }
 
-  /** One message from the page: `ready` is answered with the current render, `open` handed on. */
+  /**
+   * One message from the page: `ready` is answered with the current render, and `open` and
+   * `setup` are handed on when what they name is what the wiring takes.
+   */
   #receive(view: WebviewView, message: unknown): void {
     try {
       if (view !== this.#view || this.#disposed) return;
@@ -275,6 +290,16 @@ export class PanelView implements WebviewViewProvider, Disposable {
           return;
         }
         this.#log(`ignored a row click that named no pane (${quote(id)})`);
+        return;
+      }
+      if (fields?.type === SETUP_MESSAGE) {
+        // A closed set, checked at the door: only an action setupNotice.ts names is handed on.
+        const { action } = fields;
+        if (isSetupAction(action)) {
+          this.#setup(action);
+          return;
+        }
+        this.#log(`ignored a setup button that named no action (${quote(action)})`);
         return;
       }
       this.#log(`ignored a message from the Panes view that is none of its own: ${quote(message)}`);

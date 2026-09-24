@@ -1,9 +1,10 @@
 // The binding: VS Code's terminals, focus, the Panes panel and its menu, handed to the controller.
 //
 // Thin on purpose. Every decision the wiring makes (which pane an event is, when a clear may be
-// written, what a click does, and that nothing clears on a guess) is in controller.ts, and every
-// word, bucket, column and class the panel shows is in panel.ts; neither has a vscode import, so
-// node --test holds both to the plan with fakes. This file only builds the parts, forwards VS
+// written, what a click does, and that nothing clears on a guess) is in controller.ts, every
+// word, bucket, column and class the panel shows is in panel.ts, and every line the setup notice
+// at the panel's top shows, and when, is in setupNotice.ts; none has a vscode import, so
+// node --test holds all three to the plan with fakes. This file only builds the parts, forwards VS
 // Code's events to them, and turns the menu's commands into the controller's calls and the few
 // terminal actions VS Code offers, so it is checked by typecheck, by the build and by the manual
 // gate: logic added here is logic no unit test reaches.
@@ -39,7 +40,8 @@
 //   * NO EVENT SAYS A TERMINAL WAS RENAMED, AND NONE SAYS TIME PASSED. Terminal.name changes in
 //     place, so the names are read again every NAME_REFRESH_MS while the panel is on screen (its
 //     visibility read once, here, then followed), and the list is drawn again only when
-//     rowNamesKey() says a name, or the set of panes, has changed; the same tick brings each
+//     rowNamesKey() says a name, or the set of panes, has changed, or the setup notice says the
+//     hooks' install record has come or gone since it last looked; the same tick brings each
 //     live pane's details up to date from Claude Code's files. "22m ago" and a session's length
 //     move with the clock alone, so the panel is drawn again every AGES_REFRESH_MS while it is on
 //     screen. A drawing equal to the last one posted is never posted, so a quiet tick moves
@@ -104,6 +106,7 @@ import { NODE_SITE, findNode } from './nodeCheck.ts';
 import { CONTEXT_THRESHOLDS, badgeOf, buildPanel, renderPanel } from './panel.ts';
 import type { PanelOptions } from './panel.ts';
 import { LOG_PREFIX, PanelView } from './panelView.ts';
+import { SetupNotice, withSetupNotice } from './setupNotice.ts';
 import { PaneStatusBar } from './statusbar.ts';
 import { LIVENESS_MS, NAME_REFRESH_MS, Ticker } from './ticker.ts';
 import {
@@ -368,9 +371,24 @@ export function activate(context: ExtensionContext): void {
     if (liveRow(id, what) !== undefined) showPane(id);
   };
 
+  // The setup notice (setupNotice.ts): the panel's own line while the hooks are not in, or Node.js
+  // could not be found. It asks the same root the first-run prompt asks, never the prompt's memory,
+  // and its Set it up runs Install Hooks, whose preview and confirm decide. Its redraw is render(),
+  // built below: nothing calls it before a Node check answers or a button is pressed.
+  const setupNotice = new SetupNotice({
+    installed: () => hasInstallRecord(root),
+    remote: () => env.remoteName,
+    findNode: () => findNode(),
+    runInstall: () => Promise.resolve(commands.executeCommand(INSTALL_HOOKS_COMMAND)),
+    openNodeSite: () => Promise.resolve(env.openExternal(Uri.parse(NODE_SITE))),
+    changed: () => render(),
+    now: () => Date.now(),
+    log,
+  });
   const panelView = new PanelView({
     extensionUri: context.extensionUri,
     open: (id) => openPane(id, 'a row click'),
+    setup: (action) => void setupNotice.act(action),
     log,
   });
   const statusBar = new PaneStatusBar(() => controller.rows());
@@ -412,7 +430,10 @@ export function activate(context: ExtensionContext): void {
   // every onDidChangeActiveTerminal.
   let highlighted: Terminal | undefined;
 
-  /** The panel drawn from the rows, each pane's details and the settings, and handed over. */
+  /**
+   * The panel drawn from the rows, each pane's details and the settings, the setup notice at its
+   * top while something is missing, and handed over.
+   */
   const render = (): void => {
     try {
       const rows = controller.rows();
@@ -422,7 +443,7 @@ export function activate(context: ExtensionContext): void {
         now: Date.now(),
         ...settings,
       });
-      panelView.show(renderPanel(model), badgeOf(model));
+      panelView.show(withSetupNotice(setupNotice.needs(), renderPanel(model)), badgeOf(model));
     } catch (error) {
       log(`${LOG_PREFIX}the list could not be drawn, so it shows the one before: ${messageOf(error)}`);
     }
@@ -470,12 +491,14 @@ export function activate(context: ExtensionContext): void {
 
   // The names, read again while the panel is on screen, with each pane's details. The list is
   // drawn again only when a name or the set of panes has changed since the last tick, or the
-  // details did; a change of state or mute already draws it through refresh.
+  // hooks' install record has come or gone since the notice last looked (Install Hooks or
+  // Uninstall Hooks from any road), or the details did; a change of state or mute already draws
+  // it through refresh.
   let lastNames = rowNamesKey(controller.rows());
   const names = new Ticker(
     () => {
       const key = rowNamesKey(controller.rows());
-      if (key !== lastNames) {
+      if (key !== lastNames || setupNotice.moved()) {
         lastNames = key;
         render();
       }
@@ -549,11 +572,13 @@ export function activate(context: ExtensionContext): void {
   discover();
 
   // The tickers that only matter on screen follow the panel's visibility, read once here and
-  // then followed. Coming on screen brings the list and its details up to date at once.
+  // then followed. Coming on screen brings the list and its details up to date at once, and
+  // looks for Node.js again if it was not found (setupNotice.ts rule 6).
   const followVisibility = (visible: boolean): void => {
     names.setActive(visible);
     ages.setActive(visible);
     if (!visible) return;
+    setupNotice.checkNode();
     render();
     refreshDetails();
   };
@@ -727,6 +752,10 @@ export function activate(context: ExtensionContext): void {
       render();
     }),
     window.onDidChangeWindowState((state) => controller.windowStateChanged(state.focused)),
+    // Coming back to the window looks for Node.js again, as setupNotice.ts rule 6 says.
+    window.onDidChangeWindowState((state) => {
+      if (state.focused) setupNotice.checkNode();
+    }),
     window.onDidOpenTerminal((terminal) => {
       mapper.terminalOpened();
       events.rescan();
@@ -826,6 +855,9 @@ export function activate(context: ExtensionContext): void {
   for (const terminal of window.terminals) watchProcessId(terminal);
   events.start();
   liveness.start();
+  // The setup notice's one Node.js check at activation; its answer redraws the panel if it adds
+  // the Node line.
+  setupNotice.checkNode();
   refresh();
 }
 

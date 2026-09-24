@@ -7,7 +7,9 @@
 // as `{type: 'render', html}`. This script owns only what a string cannot: where the focus and the
 // scroll are, which row the pointer rests on, and where the peek card goes (placed by peek.ts,
 // where node --test holds the geometry). It posts `{type: 'ready'}` once it can take a render,
-// and `{type: 'open', id}` when Rob clicks a row or presses Enter on one.
+// `{type: 'open', id}` when Rob clicks a row or presses Enter on one, and `{type: 'setup',
+// action}` when he presses a button of the setup notice, the button's `data-setup` as it stands
+// (src/setupNotice.ts renders the notice above the list, and the extension checks the action).
 //
 // Six rules this file is built around:
 //
@@ -18,12 +20,16 @@
 //     one or builds markup holding one. The only styles set are CSSOM properties, which the CSP
 //     allows: the card's left and top, and each context bar's width, read from its `data-pct`.
 //   * NEVER STEAL THE FOCUS. A render lands every few seconds while Rob types in a terminal, so
-//     the focus goes back to a row only when the panel had it before the render. Otherwise only
-//     the roving tabindex moves, ready for when Rob tabs in.
+//     the focus goes back to a row, or to a setup button, only when the panel had it before the
+//     render. Otherwise only the roving tabindex moves, ready for when Rob tabs in. A setup button
+//     is a native <button>: Tab reaches it, and Enter and Space press it, so a key on it is left
+//     to the page, and a focused button that a render takes away hands the focus to the row that
+//     takes Tab.
 //   * THE MENU IS VS CODE'S. This script never listens for `contextmenu`: VS Code's webview host
 //     passes over an event whose default was prevented, and the row's native menu would never
 //     appear. A right-click never opens a pane either: `click` fires for the primary button only,
 //     and a Ctrl-click (macOS's right-click, a multi-select in VS Code's own lists) is passed over.
+//     The setup notice carries no context of its own, only the list's, so it raises no menu.
 //   * THE PEEK FLOATS, AND NEVER MOVES THE LIST. It is one fixed overlay beside the list, shown
 //     PEEK_DELAY_MS after the pointer stops on a row that has a peek, kept while the pointer is on
 //     that row or on the card, and hidden PEEK_HIDE_MS after it has left both; hidden at once on a
@@ -44,7 +50,10 @@ import type { Box } from './peek.ts';
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 
 /** A message this script posts to the extension. */
-type ToExtension = Readonly<{ type: 'ready' }> | Readonly<{ type: 'open'; id: string }>;
+type ToExtension =
+  | Readonly<{ type: 'ready' }>
+  | Readonly<{ type: 'open'; id: string }>
+  | Readonly<{ type: 'setup'; action: string }>;
 
 /** The one message this script takes from the extension: the whole list, as HTML. */
 type RenderMessage = Readonly<{ type: 'render'; html: string }>;
@@ -54,6 +63,12 @@ type Side = 'below' | 'above' | 'over';
 
 /** A pane's row, as panel.ts renders it; its `data-id` is the pane's id. */
 const ROW_SELECTOR = '.row';
+
+/**
+ * A button of the setup notice, as setupNotice.ts renders it above the rows; its `data-setup` is
+ * the action it asks the extension for.
+ */
+const SETUP_SELECTOR = 'button[data-setup]';
 
 /** A row's name, whose right edge anchors the peek. */
 const NAME_SELECTOR = '.name';
@@ -141,6 +156,20 @@ function rowById(id: string): HTMLElement | undefined {
   return rowsOf().find((row) => row.dataset.id === id);
 }
 
+/** The setup button an event target sits in, if it sits in one in the list. */
+function setupButtonOf(target: EventTarget | null): HTMLButtonElement | undefined {
+  if (!(target instanceof Element)) return undefined;
+  const button = target.closest<HTMLButtonElement>(SETUP_SELECTOR);
+  return button !== null && list.contains(button) ? button : undefined;
+}
+
+/** The setup button that asks for this action, while the notice still shows it. */
+function setupButtonFor(action: string): HTMLButtonElement | undefined {
+  return [...list.querySelectorAll<HTMLButtonElement>(SETUP_SELECTOR)].find(
+    (button) => button.dataset.setup === action,
+  );
+}
+
 function templateFor(id: string): HTMLTemplateElement | undefined {
   return [...list.querySelectorAll<HTMLTemplateElement>(TEMPLATE_SELECTOR)].find(
     (template) => template.dataset.peekFor === id,
@@ -152,13 +181,16 @@ function setRoving(target: HTMLElement, rows: readonly HTMLElement[]): void {
   for (const row of rows) row.tabIndex = row === target ? 0 : -1;
 }
 
-/** Swaps in a render, keeping the scroll, the focused row and the peek where they were. */
+/** Swaps in a render, keeping the scroll, the focus and the peek where they were. */
 function render(html: string): void {
   const scroller = document.scrollingElement ?? document.documentElement;
   const scrollTop = scroller.scrollTop;
   const focused = rowOf(document.activeElement);
   const refocus = focused !== undefined && document.hasFocus();
   const focusedIndex = focused === undefined ? -1 : rowsOf().indexOf(focused);
+  // A setup button is known by its action, since the swap replaces every element in the list.
+  const focusedAction = setupButtonOf(document.activeElement)?.dataset.setup;
+  const refocusSetup = focusedAction !== undefined && document.hasFocus();
   list.innerHTML = html;
   scroller.scrollTop = scrollTop;
   const rows = rowsOf();
@@ -174,11 +206,22 @@ function render(html: string): void {
     setRoving(target, rows);
     if (refocus) target.focus({ preventScroll: true });
   }
+  if (refocusSetup) {
+    // The button Rob was on, while its need is still shown; once it is met, the row that takes Tab.
+    (setupButtonFor(focusedAction) ?? target)?.focus({ preventScroll: true });
+  }
   refreshPeek();
 }
 
 function onClick(event: MouseEvent): void {
   if (event.button !== 0 || event.ctrlKey) return;
+  // A setup button first: a press on the notice is its own, never a row's. Enter and Space on a
+  // focused button arrive here too, as the click the browser makes of them.
+  const action = setupButtonOf(event.target)?.dataset.setup;
+  if (action !== undefined) {
+    post({ type: 'setup', action });
+    return;
+  }
   const id = rowOf(event.target)?.dataset.id;
   if (id !== undefined) post({ type: 'open', id });
 }
@@ -188,7 +231,13 @@ function onKeydown(event: KeyboardEvent): void {
   const row = rowOf(event.target);
   if (event.key === 'Enter') {
     const id = row?.dataset.id;
-    if (id === undefined || event.repeat) return;
+    if (id === undefined) {
+      // No row has the focus, so the key is left to the page: a focused setup button presses
+      // itself. Held down, the key would press it again on every repeat; only the first counts.
+      if (event.repeat) event.preventDefault();
+      return;
+    }
+    if (event.repeat) return;
     event.preventDefault();
     post({ type: 'open', id });
     return;

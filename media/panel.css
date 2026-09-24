@@ -108,6 +108,58 @@ body {
   line-height: 1.4;
 }
 
+/* ---------------------------------------------------------------- the setup notice */
+
+/* What Pane Pulse still needs, first in the list and above the counts line: each need a line that
+ * wraps and a button under it, drawn as VS Code draws a view's welcome buttons, on the rows' own
+ * insets, with a hairline between the notice and the list below it. */
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+  padding: 6px var(--pp-inset-end) 10px var(--pp-inset-start);
+  border-bottom: 1px solid var(--pp-divider);
+}
+
+.setup-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setup-line {
+  margin: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.setup-button {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 300px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  background-color: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  cursor: pointer;
+  font: inherit;
+  line-height: 18px;
+  text-align: center;
+}
+
+.setup-button:hover {
+  background-color: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.setup-button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------- the counts line */
 
 /* Each bucket drawn, as its count and its word: numbers at full strength, words and dots quiet. */
@@ -461,6 +513,24 @@ body.vscode-high-contrast .row:focus-visible {
 
 body.vscode-high-contrast .peek-bar {
   outline: 1px solid var(--vscode-contrastBorder, transparent);
+}
+
+/* A high contrast dark theme gives a button no background, only its contrast border; a light one
+ * gives it both, so the background stays the theme's and a missing one draws nothing. */
+body.vscode-high-contrast .setup-button {
+  border-color: var(--vscode-button-border, var(--vscode-contrastBorder, #6fc3df));
+  background-color: var(--vscode-button-background, transparent);
+}
+
+body.vscode-high-contrast .setup-button:hover {
+  background-color: var(--vscode-button-hoverBackground, transparent);
+  outline: 1px dashed var(--vscode-contrastActiveBorder, #f38518);
+  outline-offset: -1px;
+}
+
+body.vscode-high-contrast .setup-button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #f38518);
+  outline-offset: 2px;
 }
 
 /* ---------------------------------------------------------------- reduced motion */
