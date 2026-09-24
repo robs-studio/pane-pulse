@@ -33,10 +33,13 @@
 //      the extension host's PATH is fixed for its life. While not found, checked again when the
 //      panel comes on screen, when the window regains focus, and after the notice's Set it up
 //      returns; never two at once, and never within NODE_RECHECK_MS of the last start, by the
-//      host's clock. An answer redraws only when it changes what needs() would return.
+//      host's clock. An answer redraws only when it changes what needs() would return, and is
+//      logged only when it differs from the last one; a check that failed is logged every time.
 //   7. A BUTTON RUNS WHAT ALREADY EXISTS. Set it up runs Install Hooks, its preview and modal
-//      confirm unchanged, one run at a time from the panel; Get Node.js opens nodejs.org. The
-//      notice never notifies, never claims a day, never counts as an ask, never writes a file.
+//      confirm unchanged; Get Node.js opens nodejs.org. Both buttons run one at a time from the
+//      panel: a press while that same button's last run is still going is logged and does
+//      nothing. The notice never notifies, never claims a day, never counts as an ask, never
+//      writes a file.
 //   8. ONLY A LOCAL WINDOW SHOWS IT. In a remote window (SSH, WSL, Codespaces) Install Hooks would
 //      write settings the local window never reads, as the first-run prompt's rule 2 says: no
 //      lines, no Node checks, and a press is refused. A remote name that cannot be read counts
@@ -103,6 +106,8 @@ export const LOG_NODE_FOUND = `${LOG_PREFIX}found Node.js, so the panel stops lo
 export const LOG_NODE_MISSING = `${LOG_PREFIX}couldn't find Node.js, so the panel says so`;
 export const LOG_INSTALL_BUSY =
   `${LOG_PREFIX}Install Hooks is still running from the panel, so this press does nothing`;
+export const LOG_OPEN_BUSY =
+  `${LOG_PREFIX}nodejs.org is still opening from the panel, so this press does nothing`;
 
 /** A notice button was pressed, named by the words on it. */
 export function logPressed(action: SetupAction): string {
@@ -280,6 +285,8 @@ export class SetupNotice {
   #lastStart: number | undefined;
   /** Install Hooks is running from the panel. */
   #installing = false;
+  /** nodejs.org is opening from the panel. */
+  #opening = false;
 
   constructor(host: SetupNoticeHost) {
     this.#host = host;
@@ -352,9 +359,10 @@ export class SetupNotice {
   }
 
   /**
-   * A notice button, pressed. Refused in a remote window (rule 8). Get Node.js opens the site and
-   * does nothing else. Set it up runs Install Hooks, one run at a time, and once that has returned
-   * or failed, redraws the panel and looks for Node.js again (rules 5 and 6). Never rejects.
+   * A notice button, pressed. Refused in a remote window (rule 8). Each button runs one at a time
+   * (rule 7). Get Node.js opens the site and does nothing else. Set it up runs Install Hooks, and
+   * once that has returned or failed, redraws the panel and looks for Node.js again (rules 5 and
+   * 6). Never rejects.
    */
   async act(action: SetupAction): Promise<void> {
     try {
@@ -380,11 +388,21 @@ export class SetupNotice {
       );
       return;
     }
+    // Each flag is set before the first await, so a second press while the first runs finds it:
+    // a double-click opens nodejs.org once and runs Install Hooks once.
     if (action === 'getNode') {
-      await this.#tryAsync('opening nodejs.org', () => this.#host.openNodeSite());
+      if (this.#opening) {
+        this.#log(LOG_OPEN_BUSY);
+        return;
+      }
+      this.#opening = true;
+      try {
+        await this.#tryAsync('opening nodejs.org', () => this.#host.openNodeSite());
+      } finally {
+        this.#opening = false;
+      }
       return;
     }
-    // Set before the first await, so a second press while this one runs finds it.
     if (this.#installing) {
       this.#log(LOG_INSTALL_BUSY);
       return;
@@ -399,13 +417,21 @@ export class SetupNotice {
     this.checkNode();
   }
 
-  /** A Node check has settled: remember the answer, log it, and redraw if the lines changed. */
+  /**
+   * A Node check has settled: remember the answer, log it only if it differs from the last one
+   * (a failed check every time), and redraw if the lines changed (rule 6). So a window without
+   * Node.js says so once, not again at every focus-in that passes the recheck floor.
+   */
   #heard(found: boolean | undefined, line: string): void {
     this.#checking = false;
-    const showed = this.#nodeFound === false;
+    const last = this.#nodeFound;
     this.#nodeFound = found;
-    this.#log(line);
-    if ((found === false) !== showed) this.#try('redrawing the panel', () => this.#host.changed());
+    // Against the last answer, not every line ever said: a Node line a fault took away is said
+    // again when it comes back.
+    if (found === undefined || found !== last) this.#log(line);
+    if ((found === false) !== (last === false)) {
+      this.#try('redrawing the panel', () => this.#host.changed());
+    }
   }
 
   /** installed(), read now; FAILED, logged, when it throws or answers neither true nor false. */

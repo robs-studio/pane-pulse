@@ -23,8 +23,9 @@
 //     the focus goes back to a row, or to a setup button, only when the panel had it before the
 //     render. Otherwise only the roving tabindex moves, ready for when Rob tabs in. A setup button
 //     is a native <button>: Tab reaches it, and Enter and Space press it, so a key on it is left
-//     to the page, and a focused button that a render takes away hands the focus to the row that
-//     takes Tab.
+//     to the page. A focused button that a render takes away hands the focus to the notice's
+//     other button while one still shows, else to the row that takes Tab; with neither, the focus
+//     stays where the browser puts it (the page's <body>), since #list has no tabindex to take it.
 //   * THE MENU IS VS CODE'S. This script never listens for `contextmenu`: VS Code's webview host
 //     passes over an event whose default was prevented, and the row's native menu would never
 //     appear. A right-click never opens a pane either: `click` fires for the primary button only,
@@ -207,8 +208,15 @@ function render(html: string): void {
     if (refocus) target.focus({ preventScroll: true });
   }
   if (refocusSetup) {
-    // The button Rob was on, while its need is still shown; once it is met, the row that takes Tab.
-    (setupButtonFor(focusedAction) ?? target)?.focus({ preventScroll: true });
+    // The button Rob was on, while its need is still shown; once it is met, the notice's other
+    // button while one shows, so the focus stays on the notice; else the row that takes Tab. With
+    // neither, the browser has already moved the focus to <body>, and it stays there: #list has
+    // no tabindex, so it cannot take the focus.
+    (
+      setupButtonFor(focusedAction) ??
+      list.querySelector<HTMLButtonElement>(SETUP_SELECTOR) ??
+      target
+    )?.focus({ preventScroll: true });
   }
   refreshPeek();
 }
